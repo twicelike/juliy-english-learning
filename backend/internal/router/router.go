@@ -11,6 +11,7 @@ import (
 	"github.com/english/backend/internal/handler"
 	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/middleware"
+	"github.com/english/backend/internal/profile"
 	"github.com/english/backend/internal/user"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -107,6 +108,20 @@ func Setup(cfg *config.Config, mongoClient *mongo.Client) *gin.Engine {
 			aiService := ai.NewService(aiClientWrapped, aiCache, aiLimiter)
 			aiHandler := ai.NewHandler(aiService, aiLimiter)
 			ai.RegisterRoutes(v1, aiHandler, cfg.JWTSecret)
+		}
+
+		// Profile (Adaptive Learning)
+		profileRepo := profile.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = profileRepo.EnsureIndexes(context.Background())
+		profileService := profile.NewService(profileRepo, learnService, rawAI) // rawAI could be nil, handled gracefully
+		profileHandler := profile.NewHandler(profileService)
+
+		profileRoutes := v1.Group("/profile")
+		profileRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		{
+			profileRoutes.GET("", profileHandler.GetDashboard)
+			profileRoutes.GET("/placement-test", profileHandler.GetPlacementTest)
+			profileRoutes.POST("/placement-test", profileHandler.SubmitPlacementTest)
 		}
 	}
 

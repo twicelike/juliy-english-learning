@@ -95,8 +95,8 @@ export default function SearchBar() {
         <div className="absolute top-full left-0 right-0 mt-2 bg-[#12121c] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto">
           {results.length > 0 ? (
             <ul className="py-2">
-              {results.map((w) => (
-                <li key={w.word}>
+              {results.map((w, index) => (
+                <li key={`${w.word}-${w.pos}-${index}`}>
                   <button
                     onClick={() => handleSelect(w.word)}
                     className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center justify-between group"
