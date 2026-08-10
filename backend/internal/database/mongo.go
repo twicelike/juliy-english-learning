@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/v2/event"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -14,8 +16,38 @@ import (
 func Connect(uri string) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	logSlowQuery := func(duration time.Duration, commandName string) {
+		if duration > 100*time.Millisecond {
+			logger := log.Warn()
+			if duration > 1000*time.Millisecond {
+				logger = log.Error()
+			} else if duration > 300*time.Millisecond {
+				logger = log.Error()
+			}
+			logger.Str("command", commandName).
+				Dur("duration", duration).
+				Msg("Slow MongoDB Query")
+		}
+	}
 
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	monitor := &event.CommandMonitor{
+		Started: func(ctx context.Context, evt *event.CommandStartedEvent) {},
+		Succeeded: func(ctx context.Context, evt *event.CommandSucceededEvent) {
+			logSlowQuery(evt.Duration, evt.CommandName)
+		},
+		Failed: func(ctx context.Context, evt *event.CommandFailedEvent) {
+			logSlowQuery(evt.Duration, evt.CommandName)
+		},
+	}
+
+	clientOptions := options.Client().
+		ApplyURI(uri).
+		SetMaxPoolSize(100).
+		SetMinPoolSize(10).
+		SetMaxConnIdleTime(60 * time.Second).
+		SetMonitor(monitor)
+
+	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("mongo.Connect: %w", err)
 	}

@@ -15,6 +15,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${decoded} - Juliy Dictionary`,
     description: `Meaning, pronunciation, and examples for the word ${decoded}.`,
+    alternates: {
+      canonical: `https://juliy.com/dictionary/${encodeURIComponent(word)}`,
+    }
   };
 }
 
@@ -45,8 +48,20 @@ export default async function WordPage({ params }: PageProps) {
     );
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "DefinedTerm",
+    "name": data.word,
+    "description": data.definitions?.[0]?.definition || `Definition of ${data.word}`,
+    "inDefinedTermSet": "https://juliy.com/dictionary",
+  };
+
   return (
     <div className="min-h-[calc(100vh-4rem)] pt-12 px-6 pb-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="max-w-3xl mx-auto mb-12">
         <SearchBar />
       </div>

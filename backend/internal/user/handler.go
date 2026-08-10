@@ -43,7 +43,7 @@ func (h *Handler) AddBookmark(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AddBookmark(c.Request.Context(), userID, req.Word); err != nil {
+	if err := h.service.AddBookmark(c.Request.Context(), userID, req.Word, req.Type); err != nil {
 		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}

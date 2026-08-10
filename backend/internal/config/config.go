@@ -26,8 +26,17 @@ type Config struct {
 	OllamaModel     string // e.g. qwen2.5:7b
 	OpenRouterAPIKey string
 	OpenRouterModel  string
-	AIRateLimit     int // max requests per hour per user
+	HFToken          string
+	HFModel          string
+	AIRateLimit      int // max requests per hour per user
 	AICacheTTLHours int // cache TTL for global AI responses
+
+	// Redis & Cache
+	RedisURI              string
+	CacheTTLDictionaryMin int
+	CacheTTLDashboardMin  int
+	CacheTTLLeaderboardMin int
+	CacheTTLAIDays        int
 }
 
 // Load reads configuration from a .env file (if present) then falls back to OS
@@ -41,6 +50,11 @@ func Load() (*Config, error) {
 
 	aiRateLimit, _ := strconv.Atoi(getEnv("AI_RATE_LIMIT_PER_HOUR", "20"))
 	aiCacheTTL, _ := strconv.Atoi(getEnv("AI_CACHE_TTL_HOURS", "24"))
+
+	ttlDict, _ := strconv.Atoi(getEnv("CACHE_TTL_DICTIONARY_MINUTES", "1440")) // 24h
+	ttlDash, _ := strconv.Atoi(getEnv("CACHE_TTL_DASHBOARD_MINUTES", "5"))
+	ttlLead, _ := strconv.Atoi(getEnv("CACHE_TTL_LEADERBOARD_MINUTES", "2"))
+	ttlAI, _ := strconv.Atoi(getEnv("CACHE_TTL_AI_DAYS", "7"))
 
 	cfg := &Config{
 		Port:            getEnv("PORT", "8080"),
@@ -57,8 +71,15 @@ func Load() (*Config, error) {
 		OllamaModel:     getEnv("OLLAMA_MODEL", ""),
 		OpenRouterAPIKey: getEnv("OPENROUTER_API_KEY", ""),
 		OpenRouterModel:  getEnv("OPENROUTER_MODEL", ""),
+		HFToken:          getEnv("HF_TOKEN", ""),
+		HFModel:          getEnv("HF_MODEL", "deepseek-ai/DeepSeek-V4-Flash:novita"),
 		AIRateLimit:     aiRateLimit,
 		AICacheTTLHours: aiCacheTTL,
+		RedisURI:        getEnv("REDIS_URI", "redis://localhost:6379/0"),
+		CacheTTLDictionaryMin:  ttlDict,
+		CacheTTLDashboardMin:   ttlDash,
+		CacheTTLLeaderboardMin: ttlLead,
+		CacheTTLAIDays:         ttlAI,
 	}
 
 	if cfg.MongoURI == "" {

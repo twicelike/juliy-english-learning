@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/english/backend/internal/dictionary"
+	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/user"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -20,14 +21,16 @@ type service struct {
 	dictRepo  dictionary.Repository
 	userRepo  user.Repository
 	scheduler Scheduler
+	gamiSvc   gamification.Service
 }
 
-func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler) Service {
+func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service) Service {
 	return &service{
 		repo:      repo,
 		dictRepo:  dictRepo,
 		userRepo:  userRepo,
 		scheduler: scheduler,
+		gamiSvc:   gamiSvc,
 	}
 }
 
@@ -223,7 +226,27 @@ func (s *service) SubmitProgress(ctx context.Context, userID string, req *Submit
 		ReviewedAt:     nextP.LastReviewDate,
 	}
 
-	return s.repo.UpsertProgressAndLog(ctx, nextP, rev)
+	err = s.repo.UpsertProgressAndLog(ctx, nextP, rev)
+	if err != nil {
+		return err
+	}
+
+	// Track Gamification
+	isNewWord := (existing == nil)
+	isCorrect := (req.Quality >= QualityHard)
+
+	// Fire and forget, or at least don't block progress submission
+	if s.gamiSvc != nil {
+		act := gamification.ActivityReview
+		if isNewWord {
+			act = gamification.ActivityLearnNew
+		}
+		// Assuming we don't know if it's quiz or flashcard from this generic endpoint, default to review/learn
+		// Hardcode daily goal 20 for now, could be fetched from user profile in the future.
+		_ = s.gamiSvc.TrackActivity(ctx, userID, act, isCorrect, 20)
+	}
+
+	return nil
 }
 
 // -----------------------------------------------------------------------------

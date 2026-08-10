@@ -3,16 +3,17 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/english/backend/internal/cache"
 	"github.com/english/backend/internal/config"
 	"github.com/english/backend/internal/database"
 	"github.com/english/backend/internal/router"
+	"github.com/rs/zerolog/log"
 )
 
 // Start wires all dependencies and runs the HTTP server.
@@ -24,36 +25,46 @@ func Start() error {
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	slog.Info("configuration loaded", "env", cfg.Env, "port", cfg.Port)
+	log.Info().Str("env", cfg.Env).Str("port", cfg.Port).Msg("configuration loaded")
 
 	// 2. Connect to MongoDB
 	mongoClient, err := database.Connect(cfg.MongoURI)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
-	slog.Info("mongodb connected")
+	log.Info().Msg("mongodb connected")
 	defer func() {
 		if err := database.Disconnect(mongoClient); err != nil {
-			slog.Error("mongodb disconnect error", "error", err)
+			log.Error().Err(err).Msg("mongodb disconnect error")
 		}
 	}()
 
-	// 3. Build router (all middleware + routes)
-	r := router.Setup(cfg, mongoClient)
+	// 3. Connect to Redis
+	cacheSvc, err := cache.NewService(cfg.RedisURI)
+	if err != nil {
+		log.Warn().Err(err).Msg("redis connection failed, cache disabled")
+	}
 
-	// 4. Start HTTP server with graceful shutdown
+	// Create a background context that gets cancelled on shutdown
+	ctx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
+
+	// 4. Build router (all middleware + routes)
+	r := router.Setup(ctx, cfg, mongoClient, cacheSvc)
+
+	// 5. Start HTTP server with graceful shutdown
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  180 * time.Second,
+		WriteTimeout: 180 * time.Second,
+		IdleTimeout:  180 * time.Second,
 	}
 
 	// Run server in a goroutine so we can listen for shutdown signals concurrently.
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("server starting", "addr", srv.Addr)
+		log.Info().Str("addr", srv.Addr).Msg("server starting")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -67,7 +78,7 @@ func Start() error {
 	case err := <-errCh:
 		return fmt.Errorf("server: %w", err)
 	case sig := <-quit:
-		slog.Info("shutdown signal received", "signal", sig)
+		log.Info().Str("signal", sig.String()).Msg("shutdown signal received")
 	}
 
 	// Graceful shutdown — give in-flight requests up to 10s to finish
@@ -77,6 +88,6 @@ func Start() error {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
 
-	slog.Info("server stopped gracefully")
+	log.Info().Msg("server stopped gracefully")
 	return nil
 }

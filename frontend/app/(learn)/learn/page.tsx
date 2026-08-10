@@ -3,9 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LearningAPI, DashboardDTO } from "@/lib/learning-api";
-import { ProfileAPI, DashboardResponse, RecommendationAction } from "@/lib/profile-api";
+import { DashboardAPI, UnifiedDashboardResponse } from "@/lib/dashboard-api";
+import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
+import { LazySection } from "@/components/LazySection";
+import { RecommendationAction } from "@/lib/profile-api";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 // Map action -> href for the Recommendation Card CTA
 const ACTION_HREF: Record<RecommendationAction, string> = {
@@ -27,9 +38,10 @@ const ACTION_ICON: Record<RecommendationAction, string> = {
 export default function LearnDashboard() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [dashboard, setDashboard] = useState<DashboardDTO | null>(null);
-  const [profileDash, setProfileDash] = useState<DashboardResponse | null>(null);
+  const [data, setData] = useState<UnifiedDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showXpInfo, setShowXpInfo] = useState(false);
+  const [activeFeatureModal, setActiveFeatureModal] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -37,16 +49,12 @@ export default function LearnDashboard() {
       return;
     }
 
-    Promise.all([
-      LearningAPI.getDashboard(),
-      ProfileAPI.getDashboard(),
-    ])
-      .then(([learn, profile]) => {
-        setDashboard(learn);
-        setProfileDash(profile);
+    DashboardAPI.getUnifiedDashboard()
+      .then((dash) => {
+        setData(dash);
 
         // Redirect new users to placement test
-        if (!profile.profile.completed_placement) {
+        if (!dash.profile.completed_placement) {
           router.push("/placement");
         }
       })
@@ -56,25 +64,42 @@ export default function LearnDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="p-4 md:p-8">
+        <DashboardSkeleton />
       </div>
     );
   }
 
-  const stats = [
-    { label: "New Words", value: dashboard?.new ?? 0, color: "from-sky-500 to-blue-600", href: "/learn/flashcard?type=new" },
-    { label: "Due Today", value: dashboard?.due_today ?? 0, color: "from-amber-400 to-orange-500", href: "/learn/flashcard?type=review" },
-    { label: "Mature", value: dashboard?.mature_words ?? 0, color: "from-emerald-400 to-green-600", href: null },
-  ];
+  if (!data || !data.gamification) return null;
 
-  const accuracyPct = dashboard?.accuracy ? Math.round(dashboard.accuracy * 100) : 0;
-  const profile = profileDash?.profile;
-  const rec = profileDash?.recommendation;
-  const todayProgress = profileDash?.today_progress ?? 0;
-  const dailyGoal = profile?.daily_goal ?? 20;
-  const progressPct = Math.min(100, Math.round((todayProgress / dailyGoal) * 100));
-  const streak = profileDash?.streak ?? 0;
+  const {
+    profile,
+    recommendation,
+    gamification,
+    statistics,
+    charts = [],
+  } = data;
+
+  const {
+    level,
+    current_xp,
+    next_level_xp,
+    streak: current_streak,
+    achievements = [], // default to empty array
+    today_progress,
+    daily_goal,
+  } = gamification;
+
+  const dailyGoal = daily_goal || 20;
+  const progressPct = Math.min(100, Math.round((today_progress / dailyGoal) * 100));
+  const levelProgressPct = Math.min(100, Math.round((current_xp / next_level_xp) * 100));
+
+  // Format dates for chart (e.g. "2026-08-05" -> "Aug 05")
+  const formattedChartData = charts.map((d) => {
+    const parts = d.date.split("-");
+    const label = parts.length === 3 ? `${parts[1]}/${parts[2]}` : d.date;
+    return { ...d, label };
+  });
 
   return (
     <div className="max-w-4xl mx-auto px-6 pt-12 pb-16 space-y-8">
@@ -82,139 +107,339 @@ export default function LearnDashboard() {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">Study Dashboard</h1>
-          <p className="text-white/50">Your personalised spaced repetition schedule</p>
+          <p className="text-white/50">Your personalized spaced repetition schedule</p>
         </div>
         <div className="flex items-center gap-4 text-right">
-          {streak > 0 && (
+          {current_streak > 0 && (
             <div className="text-right">
-              <div className="text-2xl font-bold text-orange-400">🔥 {streak}</div>
+              <div className="text-2xl font-bold text-orange-400">🔥 {current_streak}</div>
               <div className="text-xs text-white/40">day streak</div>
             </div>
           )}
-          <div className="text-right">
-            <div className="text-sm text-white/50 mb-1">Review Accuracy</div>
-            <div className="text-2xl font-bold text-emerald-400">{accuracyPct}%</div>
+        </div>
+      </div>
+
+      {/* Gamification Bar (Level & XP) */}
+      <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10 flex items-center gap-6">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-2xl font-bold text-black shadow-[0_0_20px_rgba(251,191,36,0.3)] shrink-0">
+          L{level}
+        </div>
+        <div className="flex-1">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="font-semibold text-white/80 flex items-center gap-2">
+              Level {level}
+              <button 
+                onClick={() => setShowXpInfo(true)}
+                className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors"
+                title="How to gain XP"
+              >
+                i
+              </button>
+            </span>
+            <span className="text-white/50">{current_xp} / {next_level_xp} XP</span>
+          </div>
+          <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-yellow-400 to-orange-500 h-3 rounded-full transition-all duration-1000"
+              style={{ width: `${levelProgressPct}%` }}
+            />
+          </div>
+        </div>
+        {achievements && achievements.length > 0 && (
+          <div className="flex gap-2 shrink-0 border-l border-white/10 pl-6">
+            {achievements.slice(0, 3).map((a) => (
+              <div key={a.id} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-xl tooltip-trigger" title={a.title}>
+                {a.icon}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* CEFR Card */}
+        <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-indigo-600 opacity-10" />
+          <div className="relative flex items-center justify-between">
+            <div>
+              <div className="text-white/50 text-sm mb-1">Current Level</div>
+              <div className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+                {profile.current_cefr}
+              </div>
+            </div>
+            <div className="text-right text-sm text-white/40 max-w-[160px]">
+              {profile.weaknesses.length > 0 && (
+                <div>
+                  <span className="text-red-400 font-medium">Weak: </span>
+                  {profile.weaknesses.slice(0, 2).join(", ")}
+                </div>
+              )}
+              {profile.strengths.length > 0 && (
+                <div className="mt-1">
+                  <span className="text-emerald-400 font-medium">Strong: </span>
+                  {profile.strengths.slice(0, 2).join(", ")}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Today's Progress */}
+        <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-green-600 opacity-10" />
+          <div className="relative">
+            <div className="text-white/50 text-sm mb-1">Today&apos;s Goal Progress</div>
+            <div className="text-2xl font-bold text-white mb-3">
+              {today_progress} / {dailyGoal} <span className="text-white/40 text-base font-normal">items</span>
+            </div>
+            <div className="w-full bg-white/5 rounded-full h-2.5">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-green-400 h-2.5 rounded-full transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <div className="text-right text-xs text-white/40 mt-1">{progressPct}%</div>
           </div>
         </div>
       </div>
 
-      {/* CEFR Level + Today's Progress */}
-      {profile && profile.completed_placement && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* CEFR Card */}
-          <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-indigo-600 opacity-10" />
-            <div className="relative flex items-center justify-between">
-              <div>
-                <div className="text-white/50 text-sm mb-1">Current Level</div>
-                <div className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                  {profile.current_cefr}
-                </div>
-              </div>
-              <div className="text-right text-sm text-white/40 max-w-[160px]">
-                {profile.weaknesses.length > 0 && (
-                  <div>
-                    <span className="text-red-400 font-medium">Weak: </span>
-                    {profile.weaknesses.slice(0, 2).join(", ")}
-                  </div>
-                )}
-                {profile.strengths.length > 0 && (
-                  <div className="mt-1">
-                    <span className="text-emerald-400 font-medium">Strong: </span>
-                    {profile.strengths.slice(0, 2).join(", ")}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Today's Progress */}
-          <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-green-600 opacity-10" />
-            <div className="relative">
-              <div className="text-white/50 text-sm mb-1">Today&apos;s Progress</div>
-              <div className="text-2xl font-bold text-white mb-3">
-                {todayProgress} / {dailyGoal} <span className="text-white/40 text-base font-normal">words</span>
-              </div>
-              <div className="w-full bg-white/5 rounded-full h-2.5">
-                <div
-                  className="bg-gradient-to-r from-emerald-500 to-green-400 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <div className="text-right text-xs text-white/40 mt-1">{progressPct}%</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Recommendation Card */}
-      {rec && rec.action !== "done" && (
+      {recommendation.action !== "done" && (
         <Link
-          href={ACTION_HREF[rec.action]}
+          href={ACTION_HREF[recommendation.action]}
           className="flex items-center gap-5 p-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/40 hover:bg-indigo-500/20 transition-all group"
         >
-          <div className="text-4xl">{ACTION_ICON[rec.action]}</div>
+          <div className="text-4xl">{ACTION_ICON[recommendation.action]}</div>
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-indigo-400 mb-1">Recommended Next</div>
-            <div className="text-lg font-bold text-white">{rec.title}</div>
-            <div className="text-white/50 text-sm">{rec.description}</div>
-            {rec.ai_message && (
-              <div className="mt-2 text-xs text-indigo-300/70 italic">💬 &quot;{rec.ai_message}&quot;</div>
+            <div className="text-lg font-bold text-white">{recommendation.title}</div>
+            <div className="text-white/50 text-sm">{recommendation.description}</div>
+            {recommendation.ai_message && (
+              <div className="mt-2 text-xs text-indigo-300/70 italic">💬 &quot;{recommendation.ai_message}&quot;</div>
             )}
           </div>
           <div className="text-indigo-400 group-hover:translate-x-1 transition-transform text-xl">→</div>
         </Link>
       )}
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {stats.map((s) => (
-          <div key={s.label} className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10 group">
-            <div className={`absolute inset-0 bg-gradient-to-br ${s.color} opacity-10 group-hover:opacity-20 transition-opacity`} />
-            <div className="relative">
-              <div className="text-4xl font-bold text-white mb-1">{s.value}</div>
-              <div className="text-white/60 text-sm">{s.label}</div>
-              {s.href && s.value > 0 && (
-                <Link
-                  href={s.href}
-                  className={`mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r ${s.color} text-white text-sm font-medium hover:opacity-90 transition-opacity`}
-                >
-                  Study now →
-                </Link>
-              )}
-            </div>
+      {/* Activity Chart Section */}
+      <div className="rounded-2xl p-6 bg-white/5 border border-white/10">
+        <h3 className="text-lg font-bold text-white mb-6">Learning Activity (Last 7 Days)</h3>
+        <LazySection fallback={<div className="h-[250px] bg-white/5 animate-pulse rounded-xl"></div>}>
+          <div className="h-[250px] w-full mt-6">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={formattedChartData}>
+                <defs>
+                  <linearGradient id="colorXp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis 
+                  dataKey="label" 
+                  stroke="rgba(255,255,255,0.3)" 
+                  tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis 
+                  stroke="rgba(255,255,255,0.3)" 
+                  tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1e1e2d', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }}
+                  itemStyle={{ color: '#818cf8' }}
+                  cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="xp_gained" 
+                  name="XP Earned" 
+                  stroke="#818cf8" 
+                  strokeWidth={3}
+                  dot={{ fill: '#818cf8', r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                  fillOpacity={1} 
+                  fill="url(#colorXp)" 
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-        ))}
+        </LazySection>
       </div>
 
       {/* Session launchers */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <Link href="/learn/flashcard" className="flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <div className="text-3xl">🃏</div>
-          <h2 className="text-lg font-bold text-white">Flashcards</h2>
-          <p className="text-white/50 text-sm">Flip-card review with Pass / Fail scoring</p>
-          <span className="text-indigo-400 text-sm group-hover:underline">Start session →</span>
-        </Link>
-        <Link href="/learn/quiz" className="flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <div className="text-3xl">🧠</div>
-          <h2 className="text-lg font-bold text-white">Multiple Choice Quiz</h2>
-          <p className="text-white/50 text-sm">Pick the correct definition from same-POS distractors</p>
-          <span className="text-indigo-400 text-sm group-hover:underline">Start quiz →</span>
-        </Link>
-        <Link href="/learn/writing" className="flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <div className="text-3xl">✏️</div>
-          <h2 className="text-lg font-bold text-white">Writing Lab</h2>
-          <p className="text-white/50 text-sm">AI-powered grammar check and vocabulary improvement</p>
-          <span className="text-indigo-400 text-sm group-hover:underline">Open lab →</span>
-        </Link>
-        <Link href="/learn/fill-blank" className="flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <div className="text-3xl">🤖</div>
-          <h2 className="text-lg font-bold text-white">AI Fill-in-the-Blank</h2>
-          <p className="text-white/50 text-sm">AI generates sentences from your bookmarked words</p>
-          <span className="text-indigo-400 text-sm group-hover:underline">Start quiz →</span>
-        </Link>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('flashcard'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Flashcards"
+          >i</button>
+          <Link href="/learn/flashcard" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">🃏</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Flashcards</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Flip-card review with Pass / Fail scoring</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start session →</span>
+        </div>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('quiz'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Quiz"
+          >i</button>
+          <Link href="/learn/quiz" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">🧠</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Multiple Choice Quiz</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Pick the correct definition from same-POS distractors</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
+        </div>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('writing'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Writing Lab"
+          >i</button>
+          <Link href="/learn/writing" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">✏️</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Writing Lab</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI-powered grammar check and vocabulary improvement</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Open lab →</span>
+        </div>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('fill-blank'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Fill in the Blank"
+          >i</button>
+          <Link href="/learn/fill-blank" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">🤖</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">AI Fill-in-the-Blank</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI generates sentences from your bookmarked words</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
+        </div>
       </div>
+
+      {/* XP Info Modal */}
+      {showXpInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowXpInfo(false)}>
+          <div className="bg-[#1e1e2d] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-orange-400">🔥</span> How to gain XP & Level Up
+              </h3>
+              <button 
+                onClick={() => setShowXpInfo(false)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                <div className="text-white/80">Learn a New Word</div>
+                <div className="text-emerald-400 font-bold">+10 XP</div>
+              </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                <div className="text-white/80">Review a Word Correctly</div>
+                <div className="text-emerald-400 font-bold">+5 XP</div>
+              </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
+                <div className="text-white/80">Complete Daily Goal ({dailyGoal} items)</div>
+                <div className="text-emerald-400 font-bold">+20 XP Bonus</div>
+              </div>
+            </div>
+            
+            <div className="mt-6 text-sm text-white/50 bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20">
+              <p>Keep your daily streak alive and complete your daily goals to rank up your CEFR level faster! The more XP you earn, the higher your level becomes.</p>
+            </div>
+            
+            <button 
+              onClick={() => setShowXpInfo(false)}
+              className="mt-6 w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold transition-colors"
+            >
+              Got it, let&apos;s study!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Feature Info Modal */}
+      {activeFeatureModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-[#1e1e2d] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                {activeFeatureModal === 'flashcard' && <><span className="text-xl">🃏</span> Flashcards Guide</>}
+                {activeFeatureModal === 'quiz' && <><span className="text-xl">🧠</span> Quiz Guide</>}
+                {activeFeatureModal === 'writing' && <><span className="text-xl">✏️</span> Writing Lab Guide</>}
+                {activeFeatureModal === 'fill-blank' && <><span className="text-xl">🤖</span> AI Fill-in Guide</>}
+              </h3>
+              <button 
+                onClick={() => setActiveFeatureModal(null)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="text-white/70 space-y-4 leading-relaxed text-sm">
+              {activeFeatureModal === 'flashcard' && (
+                <>
+                  <p>Flashcards use <strong>Spaced Repetition (SM-2)</strong> to help you memorize words efficiently.</p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li>Look at the word and try to recall its meaning.</li>
+                    <li>Flip the card to check if you were right.</li>
+                    <li>Rate your recall: <strong>Hard</strong>, <strong>Good</strong>, or <strong>Easy</strong>.</li>
+                    <li>Words you struggle with will appear more often, while easy words will be spaced out to save your time.</li>
+                  </ul>
+                </>
+              )}
+              {activeFeatureModal === 'quiz' && (
+                <>
+                  <p>Test your knowledge with multiple-choice questions!</p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li>The system generates questions based on your saved words.</li>
+                    <li>Distractors (wrong answers) are intelligently chosen to be the same part-of-speech to challenge your understanding.</li>
+                    <li>Completing quizzes helps reinforce your memory and earns you XP.</li>
+                  </ul>
+                </>
+              )}
+              {activeFeatureModal === 'writing' && (
+                <>
+                  <p>The Writing Lab is your personal AI English tutor.</p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li>Type paragraphs or sentences using your new vocabulary.</li>
+                    <li>The AI will check your grammar, spelling, and sentence structure.</li>
+                    <li>You will receive detailed feedback, corrections, and suggestions for more natural phrasing.</li>
+                  </ul>
+                </>
+              )}
+              {activeFeatureModal === 'fill-blank' && (
+                <>
+                  <p>Contextual learning is the best way to master vocabulary!</p>
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li>The AI generates completely new sentences using your bookmarked words.</li>
+                    <li>A word is hidden, and you must type or select the correct word to fill in the blank.</li>
+                    <li>This ensures you understand how words are actually used in real-life contexts, rather than just memorizing definitions.</li>
+                  </ul>
+                </>
+              )}
+            </div>
+            
+            <button 
+              onClick={() => setActiveFeatureModal(null)}
+              className="mt-6 w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold transition-colors"
+            >
+              Close Guide
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

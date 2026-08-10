@@ -15,7 +15,7 @@ var (
 
 type Service interface {
 	GetProfile(ctx context.Context, userID string) (*auth.UserResponse, error)
-	AddBookmark(ctx context.Context, userID string, word string) error
+	AddBookmark(ctx context.Context, userID string, word string, bType string) error
 	RemoveBookmark(ctx context.Context, userID string, word string) error
 	ListBookmarks(ctx context.Context, userID string) ([]BookmarkResponse, error)
 }
@@ -53,15 +53,20 @@ func (s *service) GetProfile(ctx context.Context, userID string) (*auth.UserResp
 	}, nil
 }
 
-func (s *service) AddBookmark(ctx context.Context, userID string, word string) error {
+func (s *service) AddBookmark(ctx context.Context, userID string, word string, bType string) error {
 	oid, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
 		return err
 	}
 
+	if bType == "" {
+		bType = "word" // Default type
+	}
+
 	bookmark := &SavedWord{
 		UserID:  oid,
 		Word:    word,
+		Type:    bType,
 		AddedAt: time.Now(),
 	}
 
@@ -92,6 +97,7 @@ func (s *service) ListBookmarks(ctx context.Context, userID string) ([]BookmarkR
 	for _, w := range words {
 		dtos = append(dtos, BookmarkResponse{
 			Word:    w.Word,
+			Type:    w.Type,
 			AddedAt: w.AddedAt,
 		})
 	}

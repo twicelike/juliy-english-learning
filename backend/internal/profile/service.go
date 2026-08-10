@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/english/backend/internal/ai"
+	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/learning"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -14,13 +15,15 @@ type service struct {
 	repo            Repository
 	learningService learning.Service
 	aiClient        ai.AIClient
+	gamiService     gamification.Service
 }
 
-func NewService(repo Repository, learningSvc learning.Service, aiClient ai.AIClient) Service {
+func NewService(repo Repository, learningSvc learning.Service, aiClient ai.AIClient, gamiSvc gamification.Service) Service {
 	return &service{
 		repo:            repo,
 		learningService: learningSvc,
 		aiClient:        aiClient,
+		gamiService:     gamiSvc,
 	}
 }
 
@@ -129,7 +132,17 @@ func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardRe
 		return nil, fmt.Errorf("learning service error: %w", err)
 	}
 
-	// 3. Logic to determine Next Action
+	// 3. Load Gamification
+	stats, dp, unlockedDefs, err := s.gamiService.GetStatsAndProgress(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("gamification service error: %w", err)
+	}
+	charts, err := s.gamiService.GetChartData(ctx, userID, 7)
+	if err != nil {
+		return nil, fmt.Errorf("chart data error: %w", err)
+	}
+
+	// 4. Logic to determine Next Action
 	var action RecommendationAction
 	var title, desc string
 	var count int
@@ -156,7 +169,7 @@ func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardRe
 		count = 0
 	}
 
-	// 4. Optionally Generate AI Summary Message
+	// 5. Optionally Generate AI Summary Message
 	aiMessage := "Keep up the good work!"
 	if s.aiClient != nil && profileDTO.CompletedPlacement {
 		prompt := fmt.Sprintf(`You are a concise, encouraging English tutor.
@@ -176,13 +189,34 @@ Return ONLY a JSON object with a "message" string field.`,
 		}
 	}
 
-	// Calculate Today's Progress (Simplified: assumes learningDash.ReviewCount + learned = progress, or just dummy for MVP if not tracked daily)
-	// Currently our DB doesn't easily sum reviews "today", so we'll approximate based on what is not due.
-	// We'll just return a placeholder or calculate based on DailyGoal.
-	todayProgress := learningDash.LearnedCount // Placeholder
+	// Calculate accuracy (dummy value or based on DP)
+	accuracy := 0
+	if dp.ReviewsCompleted > 0 {
+		accuracy = (dp.CorrectReviews * 100) / dp.ReviewsCompleted
+	}
+
+	totalActionsToday := dp.ReviewsCompleted + dp.NewWordsLearned
+
+	_, currentXP, nextLevelXP := gamification.CalculateLevel(stats.TotalXP)
 
 	resp := &DashboardResponse{
 		Profile: *profileDTO,
+		Statistics: DashboardStatistics{
+			WordsLearned: learningDash.LearnedCount,
+			ReviewsDue:   learningDash.DueToday,
+			Accuracy:     accuracy,
+		},
+		Charts: charts,
+		Gamification: DashboardGamification{
+			Level:         stats.Level,
+			CurrentXP:     currentXP,
+			NextLevelXP:   nextLevelXP,
+			Streak:        stats.CurrentStreak,
+			DailyGoalMet:  dp.DailyGoalReached,
+			TodayProgress: totalActionsToday,
+			DailyGoal:     profileDTO.DailyGoal,
+			Achievements:  unlockedDefs,
+		},
 		Recommendation: RecommendationResponse{
 			Action:      action,
 			Title:       title,
@@ -190,8 +224,6 @@ Return ONLY a JSON object with a "message" string field.`,
 			Count:       count,
 			AIMessage:   aiMessage,
 		},
-		TodayProgress: todayProgress,
-		Streak:        1, // Placeholder for streak logic
 	}
 
 	return resp, nil
