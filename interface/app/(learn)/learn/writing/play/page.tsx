@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { WritingAPI, MissionDTO, EvaluationResponseDTO } from "@/lib/writing-api";
 import { UserAPI } from "@/lib/user-api";
 import Link from "next/link";
-import { ArrowLeft, Send, Check, Bookmark, Target, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { ArrowLeft, Send, Check, Bookmark, Target, Loader2, Sparkles, AlertCircle, Info } from "lucide-react";
 
 function WritingPlayContent() {
   const router = useRouter();
@@ -190,17 +190,27 @@ function WritingPlayContent() {
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {[
-               { label: "Grammar", data: result.breakdown.grammar },
-               { label: "Vocabulary", data: result.breakdown.vocabulary },
-               { label: "Naturalness", data: result.breakdown.naturalness },
-               { label: "Completeness", data: result.breakdown.completeness }
+               { label: "Grammar", desc: "Evaluates correct usage of the target grammar and checks for any structural, tense, or preposition errors.", data: result.breakdown.grammar },
+               { label: "Vocabulary", desc: "Evaluates the precise and appropriate use of the required target vocabulary words in your sentence.", data: result.breakdown.vocabulary },
+               { label: "Naturalness", desc: "Assesses how native-like and contextually appropriate your phrasing is, penalizing awkward word-for-word translations.", data: result.breakdown.naturalness },
+               { label: "Completeness", desc: "Verifies that 100% of the original Vietnamese meaning is conveyed without missing any details or nuances.", data: result.breakdown.completeness }
              ].map((metric, idx) => (
-               <div key={idx} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex gap-4">
+               <div key={idx} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex gap-4 relative">
                   <div className={`w-12 h-12 flex-shrink-0 rounded-xl flex items-center justify-center font-bold text-lg border ${getScoreColor(metric.data.score)} ${getScoreBg(metric.data.score)}`}>
                     {metric.data.score}
                   </div>
                   <div>
-                    <h3 className="text-white/90 font-bold mb-1">{metric.label}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-white/90 font-bold">{metric.label}</h3>
+                      <div className="group/tooltip relative flex items-center">
+                         <Info className="w-3.5 h-3.5 text-white/30 hover:text-white/70 cursor-help transition-colors" />
+                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-[#1a1b23] border border-white/10 rounded-xl text-xs text-white/80 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-2xl leading-relaxed">
+                            {metric.desc}
+                            {/* Little triangle for tooltip */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-[#1a1b23]"></div>
+                         </div>
+                      </div>
+                    </div>
                     <p className="text-white/50 text-sm leading-relaxed">{metric.data.feedback}</p>
                   </div>
                </div>

@@ -131,10 +131,14 @@ Chấm điểm khắt khe trên thang 100 và trả về ĐÚNG định dạng J
   "detailed_feedback": "Nhận xét tổng quan tối đa 2 câu."
 }
 
-LƯU Ý QUAN TRỌNG: 
+LƯU Ý QUAN TRỌNG VÀ LUẬT CHẤM ĐIỂM TỪNG PHẦN: 
+- "grammar": Chỉ chấm lỗi cấu trúc, thì, giới từ, mạo từ, v.v.
+- "vocabulary": Chỉ chấm việc dùng sai hoặc thiếu Từ vựng mục tiêu (Target Vocabulary).
+- "naturalness": Chấm các lỗi lặp từ (repetition), diễn đạt word-by-word gượng gạo, văn phong không hợp ngữ cảnh. Bắt buộc trừ điểm lặp từ ở đây.
+- "completeness": CHỈ kiểm tra xem bài làm có truyền tải ĐỦ 100% ý nghĩa và thông tin của câu gốc hay không (bị thiếu vế, thiếu từ). Tuyệt đối KHÔNG nhận xét về lỗi lặp từ, ngữ pháp hay văn phong ở mục completeness.
 - KHÔNG trả về bất kỳ text nào khác ngoài JSON object.
-- Tổng điểm (score) nên là trung bình cộng của 4 tiêu chí thành phần.
-- CỰC KỲ QUAN TRỌNG: Câu nhận xét phải thật ngắn gọn để không bị cắt bớt JSON!
+- Tổng điểm (score) nên là trung bình cộng của 4 tiêu chí.
+- CỰC KỲ QUAN TRỌNG: Câu nhận xét của mỗi tiêu chí phải THẬT NGẮN GỌN (tối đa 1 câu) để tránh lỗi JSON!
 `, vietnameseText, mission.Scenario, mission.Topic, vocabText, grammarText, userContent)
 }
 
