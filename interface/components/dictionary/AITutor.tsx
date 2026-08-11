@@ -24,14 +24,12 @@ type Result =
 
 const BUTTONS: { id: Feature; label: string; emoji: string }[] = [
   { id: "explain", label: "Explain Word", emoji: "🧠" },
-  { id: "nuance", label: "Explain Nuances", emoji: "🎯" },
-  { id: "examples", label: "More Examples", emoji: "📝" },
-  { id: "mnemonic", label: "Memory Trick", emoji: "💡" },
 ];
 
 export default function AITutor({ word, pos }: AITutorProps) {
   const [loading, setLoading] = useState<Feature | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = async (feature: Feature) => {
@@ -43,15 +41,7 @@ export default function AITutor({ word, pos }: AITutorProps) {
       if (feature === "explain") {
         const data = await AIAPI.explainWord(req);
         setResult({ feature, data });
-      } else if (feature === "nuance") {
-        const data = await AIAPI.explainNuance(req);
-        setResult({ feature, data });
-      } else if (feature === "examples") {
-        const data = await AIAPI.generateExamples(req);
-        setResult({ feature, data });
-      } else {
-        const data = await AIAPI.createMnemonic(req);
-        setResult({ feature, data });
+        setHasFetched(true);
       }
     } catch (e: any) {
       setError(e?.message ?? "AI is unavailable right now.");
@@ -74,19 +64,23 @@ export default function AITutor({ word, pos }: AITutorProps) {
           <button
             key={btn.id}
             onClick={() => handleClick(btn.id)}
-            disabled={loading !== null}
+            disabled={loading !== null || hasFetched}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
               loading === btn.id
                 ? "bg-indigo-500/30 border-indigo-500/50 text-indigo-300 cursor-wait"
-                : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white hover:border-indigo-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                : hasFetched 
+                  ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-200 cursor-default"
+                  : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white hover:border-indigo-500/40"
             }`}
           >
             {loading === btn.id ? (
               <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            ) : hasFetched ? (
+              <span>✅</span>
             ) : (
               <span>{btn.emoji}</span>
             )}
-            {btn.label}
+            {hasFetched ? "Explanation Loaded" : btn.label}
           </button>
         ))}
       </div>
@@ -131,47 +125,6 @@ export default function AITutor({ word, pos }: AITutorProps) {
                   Register: <span className="text-indigo-300 capitalize">{result.data.register}</span>
                 </p>
               )}
-            </>
-          )}
-
-          {result.feature === "nuance" && (
-            <>
-              <Section title="Core Meaning" icon="🔑">{result.data.coreMeaning}</Section>
-              <Section title="Subtle Meaning" icon="✨">{result.data.subtleMeaning}</Section>
-              {result.data.usageNotes.length > 0 && (
-                <div>
-                  <SectionHeader icon="📌" title="Usage Notes" />
-                  <ul className="space-y-1 mt-2">
-                    {result.data.usageNotes.map((n, i) => (
-                      <li key={i} className="text-white/60 text-sm flex gap-2"><span className="text-indigo-400">•</span>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {result.data.confusedWith.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-white/40 text-xs">Often confused with:</p>
-                  {result.data.confusedWith.map((w, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs">{w}</span>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {result.feature === "examples" && (
-            <div className="space-y-2">
-              {result.data.examples.map((ex, i) => (
-                <p key={i} className="text-white/70 text-sm italic border-l-2 border-indigo-500/40 pl-3">"{ex}"</p>
-              ))}
-            </div>
-          )}
-
-          {result.feature === "mnemonic" && (
-            <>
-              <Section title="Memory Trick" icon="💡">{result.data.mnemonic}</Section>
-              <Section title="Story" icon="📖">{result.data.story}</Section>
-              <Section title="Visual Image" icon="🖼️">{result.data.visual}</Section>
             </>
           )}
         </div>

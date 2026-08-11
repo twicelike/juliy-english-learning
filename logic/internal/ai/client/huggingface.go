@@ -7,7 +7,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
+
+// cleanJSON removes markdown code blocks like ```json ... ``` if they exist.
+func cleanJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```json") {
+		s = strings.TrimPrefix(s, "```json")
+	} else if strings.HasPrefix(s, "```") {
+		s = strings.TrimPrefix(s, "```")
+	}
+	if strings.HasSuffix(s, "```") {
+		s = strings.TrimSuffix(s, "```")
+	}
+	return strings.TrimSpace(s)
+}
 
 // HuggingFaceClient implements ai.AIClient using the HuggingFace Router API (OpenAI compatible).
 type HuggingFaceClient struct {
@@ -19,7 +34,7 @@ type HuggingFaceClient struct {
 // NewHuggingFaceClient creates a new HuggingFace AI client.
 func NewHuggingFaceClient(token, model string) (*HuggingFaceClient, error) {
 	if model == "" {
-		model = "deepseek-ai/DeepSeek-V4-Flash:novita"
+		model = "meta-llama/Llama-3.3-70B-Instruct"
 	}
 	return &HuggingFaceClient{
 		token:      token,
@@ -63,7 +78,6 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 		Messages: []hfMsg{
 			{Role: "user", Content: prompt},
 		},
-		ResponseFormat: &hfFmt{Type: "json_object"},
 		Temperature:    0.2, // low temp for deterministic JSON
 		MaxTokens:      2048,
 		Stream:         false,
@@ -88,21 +102,22 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 	}
 	defer resp.Body.Close()
 
+	respBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
-		respBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("huggingface: API error %d: %s", resp.StatusCode, string(respBytes))
 	}
 
 	var hfResp hfResponse
-	if err := json.NewDecoder(resp.Body).Decode(&hfResp); err != nil {
+	if err := json.Unmarshal(respBytes, &hfResp); err != nil {
 		return fmt.Errorf("huggingface: decode response: %w", err)
 	}
 
 	if len(hfResp.Choices) == 0 || hfResp.Choices[0].Message.Content == "" {
-		return fmt.Errorf("huggingface: empty response")
+		return fmt.Errorf("huggingface: empty response, raw: %s", string(respBytes))
 	}
 
-	rawJSON := hfResp.Choices[0].Message.Content
+	rawJSON := cleanJSON(hfResp.Choices[0].Message.Content)
 	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
 		return fmt.Errorf("huggingface: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
 	}

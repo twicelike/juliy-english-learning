@@ -2,10 +2,26 @@ import apiClient from "./api-client";
 
 export interface DashboardStatsDTO {
   total_completed: number;
+  completed_easy: number;
+  completed_medium: number;
+  completed_hard: number;
   average_score: number;
   mastery_mastered: number;
   mastery_familiar: number;
   mastery_beginner: number;
+  recent_submissions: MissionHistoryDTO[];
+}
+
+export interface MissionHistoryDTO {
+  mission_id: string;
+  topic: string;
+  scenario: string;
+  prompt_vi: string[];
+  user_content: string;
+  corrected_version: string;
+  detailed_feedback: string;
+  score: number;
+  completed_at: string;
 }
 
 export interface MissionDTO {

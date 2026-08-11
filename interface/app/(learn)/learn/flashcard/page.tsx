@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LearningAPI, SessionItemDTO } from "@/lib/learning-api";
 import { useAuthStore } from "@/store/auth-store";
 
-export default function FlashcardPage() {
+function FlashcardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const type = searchParams.get("type");
+  const sessionId = searchParams.get("sessionId");
   const { user } = useAuthStore();
   const [cards, setCards] = useState<SessionItemDTO[]>([]);
   const [index, setIndex] = useState(0);
@@ -17,29 +20,54 @@ export default function FlashcardPage() {
 
   useEffect(() => {
     if (!user) { router.push("/login"); return; }
-    LearningAPI.getSession("flashcard", 10)
-      .then((s) => {
-        if (s.items.length === 0) setDone(true);
-        else setCards(s.items);
-      })
-      .catch((e) => {
+    
+    const loadSession = async () => {
+      try {
+        if (type === "new") {
+          const s = await LearningAPI.createSession("new_words");
+          router.replace(`/learn/flashcard?sessionId=${s.id}`);
+          return;
+        } else if (type === "review") {
+          const s = await LearningAPI.createSession("review");
+          router.replace(`/learn/flashcard?sessionId=${s.id}`);
+          return;
+        } else if (sessionId) {
+          const s = await LearningAPI.getSessionById(sessionId);
+          if (s.items.length === 0) setDone(true);
+          else {
+            setCards(s.items);
+            setIndex(s.current_index || 0);
+          }
+        } else {
+          const s = await LearningAPI.getSession("flashcard", 10);
+          if (s.items.length === 0) setDone(true);
+          else setCards(s.items);
+        }
+      } catch (e: any) {
         console.error("Failed to load flashcard session:", e);
-      })
-      .finally(() => setLoading(false));
-  }, [user, router]);
+        if (e.response?.data?.error?.code === "NO_NEW_WORDS" || e.response?.data?.error?.code === "NO_DUE_WORDS") {
+          setDone(true);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSession();
+  }, [user, router, type, sessionId]);
 
   const handleResult = useCallback(async (quality: 1 | 3 | 4 | 5) => {
     if (submitting || !cards[index]) return;
     setSubmitting(true);
     try {
-      await LearningAPI.submitProgress(cards[index].word_id, quality);
+      await LearningAPI.submitProgress(cards[index].word_id, quality, undefined, sessionId || undefined);
     } catch (e) { console.error(e); }
 
     setSubmitting(false);
     setFlipped(false);
     if (index + 1 >= cards.length) setDone(true);
     else setIndex((i) => i + 1);
-  }, [submitting, cards, index]);
+  }, [submitting, cards, index, sessionId]);
 
   const handlePrevious = useCallback(() => {
     if (index === 0) return;
@@ -59,8 +87,14 @@ export default function FlashcardPage() {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-6 text-center px-6">
         <div className="text-6xl">🎉</div>
-        <h1 className="text-3xl font-bold text-white">Session Complete!</h1>
-        <p className="text-white/50">You've reviewed all your cards for now.</p>
+        <h1 className="text-3xl font-bold text-white">
+          {type === "review" ? "You're all caught up for today!" : "Session Complete!"}
+        </h1>
+        <p className="text-white/50">
+          {type === "review" 
+            ? "There are no more words due for review right now." 
+            : "You've reviewed all your cards for this session."}
+        </p>
         <button onClick={() => router.push("/learn")} className="px-6 py-3 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600">
           Back to Dashboard
         </button>
@@ -180,5 +214,17 @@ export default function FlashcardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FlashcardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <FlashcardContent />
+    </Suspense>
   );
 }

@@ -48,6 +48,15 @@ type RateLimiter interface {
 }
 
 // -----------------------------------------------------------------------
+// ExplanationRepo — database cache for word explanations.
+// -----------------------------------------------------------------------
+
+type ExplanationRepo interface {
+	GetAIExplanation(ctx context.Context, word, pos, level, nativeLang string) (*dictionary.AIExplanation, error)
+	SaveAIExplanation(ctx context.Context, expl *dictionary.AIExplanation) error
+}
+
+// -----------------------------------------------------------------------
 // AITutorService — high-level AI features exposed to handlers.
 // -----------------------------------------------------------------------
 

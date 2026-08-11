@@ -40,7 +40,7 @@ export const DictionaryAPI = {
   },
 
   getRandom: async (): Promise<WordDTO | null> => {
-    const res = await apiClient.get<ApiResponse<WordDTO>>("/words/random");
+    const res = await apiClient.get<ApiResponse<WordDTO>>(`/words/random?t=${Date.now()}`);
     return res.data.data;
   },
 

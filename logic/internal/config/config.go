@@ -72,7 +72,7 @@ func Load() (*Config, error) {
 		OpenRouterAPIKey: getEnv("OPENROUTER_API_KEY", ""),
 		OpenRouterModel:  getEnv("OPENROUTER_MODEL", ""),
 		HFToken:          getEnv("HF_TOKEN", ""),
-		HFModel:          getEnv("HF_MODEL", "deepseek-ai/DeepSeek-V4-Flash:novita"),
+		HFModel:          getEnv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
 		AIRateLimit:     aiRateLimit,
 		AICacheTTLHours: aiCacheTTL,
 		RedisURI:        getEnv("REDIS_URI", "redis://localhost:6379/0"),

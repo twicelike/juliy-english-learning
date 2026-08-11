@@ -1,0 +1,1 @@
+var cursor = db.learning_progress.aggregate([{ $lookup: { from: 'words', localField: 'word_id', foreignField: '_id', as: 'dict' } }, { $unwind: '$dict' }]); var out = []; cursor.forEach(doc => { out.push(doc.dict.word); }); printjson(out);

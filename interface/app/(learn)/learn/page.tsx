@@ -20,10 +20,10 @@ import {
 
 // Map action -> href for the Recommendation Card CTA
 const ACTION_HREF: Record<RecommendationAction, string> = {
-  review: "/learn/flashcard?type=review",
-  learn_new: "/learn/flashcard?type=new",
+  review: "/learn/session?mode=review",
+  learn_new: "/learn/session?mode=new_words",
   grammar: "/learn/writing",
-  fill_blank: "/learn/fill-blank",
+  fill_blank: "/learn/session?mode=review", // Just fall back to review for now
   done: "/learn",
 };
 
@@ -156,30 +156,53 @@ export default function LearnDashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* CEFR Card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Proficiency Profile Card */}
         <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-indigo-600 opacity-10" />
-          <div className="relative flex items-center justify-between">
-            <div>
-              <div className="text-white/50 text-sm mb-1">Current Level</div>
-              <div className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                {profile.current_cefr}
-              </div>
-            </div>
-            <div className="text-right text-sm text-white/40 max-w-[160px]">
-              {profile.weaknesses.length > 0 && (
-                <div>
-                  <span className="text-red-400 font-medium">Weak: </span>
+          <div className="relative flex flex-col justify-center h-full gap-4">
+            {profile.weaknesses.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-widest text-red-400/70 font-semibold mb-1">Areas to Improve (Weak)</div>
+                <div className="text-white/80 font-medium text-lg">
                   {profile.weaknesses.slice(0, 2).join(", ")}
                 </div>
-              )}
-              {profile.strengths.length > 0 && (
-                <div className="mt-1">
-                  <span className="text-emerald-400 font-medium">Strong: </span>
+              </div>
+            )}
+            {profile.strengths.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-widest text-emerald-400/70 font-semibold mb-1">Strengths</div>
+                <div className="text-white/80 font-medium text-lg">
                   {profile.strengths.slice(0, 2).join(", ")}
                 </div>
-              )}
+              </div>
+            )}
+            {profile.weaknesses.length === 0 && profile.strengths.length === 0 && (
+              <div className="text-white/50 text-sm italic text-center">
+                Keep studying to discover your strengths and weaknesses.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Word Bank Breakdown */}
+        <div className="relative overflow-hidden rounded-2xl p-6 bg-white/5 border border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600 opacity-10" />
+          <div className="relative">
+            <div className="text-white/50 text-sm mb-4">Word Bank</div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-white/80 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-400"></span> Review Due</div>
+                <div className="font-bold text-white">{statistics.reviews_due}</div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-white/80 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-400"></span> Pending</div>
+                <div className="font-bold text-white">{statistics.pending_words}</div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-white/80 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-400"></span> New Available</div>
+                <div className="font-bold text-white">{statistics.new_words}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -221,6 +244,46 @@ export default function LearnDashboard() {
           <div className="text-indigo-400 group-hover:translate-x-1 transition-transform text-xl">→</div>
         </Link>
       )}
+
+      {/* Session launchers */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('flashcard'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Flashcards"
+          >i</button>
+          <Link href="/learn/session?mode=new_words" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">🃏</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Learn New Words</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Unified session: Flashcard → Quiz → Context</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start session →</span>
+        </div>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('quiz'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Quiz"
+          >i</button>
+          <Link href="/learn/session?mode=review" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">🧠</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Review Due Words</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Keep your memory fresh with a unified review session</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
+        </div>
+        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
+          <button 
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('writing'); }}
+            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
+            title="How to use Writing Lab"
+          >i</button>
+          <Link href="/learn/writing" className="absolute inset-0 z-0"></Link>
+          <div className="text-3xl relative z-10 pointer-events-none">✏️</div>
+          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Writing Lab</h2>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI-powered grammar check and vocabulary improvement</p>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Open lab →</span>
+        </div>
+      </div>
 
       {/* Activity Chart Section */}
       <div className="rounded-2xl p-6 bg-white/5 border border-white/10">
@@ -269,58 +332,6 @@ export default function LearnDashboard() {
             </ResponsiveContainer>
           </div>
         </LazySection>
-      </div>
-
-      {/* Session launchers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <button 
-            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('flashcard'); }}
-            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
-            title="How to use Flashcards"
-          >i</button>
-          <Link href="/learn/flashcard" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">🃏</div>
-          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Flashcards</h2>
-          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Flip-card review with Pass / Fail scoring</p>
-          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start session →</span>
-        </div>
-        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <button 
-            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('quiz'); }}
-            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
-            title="How to use Quiz"
-          >i</button>
-          <Link href="/learn/quiz" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">🧠</div>
-          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Multiple Choice Quiz</h2>
-          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Pick the correct definition from same-POS distractors</p>
-          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
-        </div>
-        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <button 
-            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('writing'); }}
-            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
-            title="How to use Writing Lab"
-          >i</button>
-          <Link href="/learn/writing" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">✏️</div>
-          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Writing Lab</h2>
-          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI-powered grammar check and vocabulary improvement</p>
-          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Open lab →</span>
-        </div>
-        <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-          <button 
-            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('fill-blank'); }}
-            className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
-            title="How to use Fill in the Blank"
-          >i</button>
-          <Link href="/learn/fill-blank" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">🤖</div>
-          <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">AI Fill-in-the-Blank</h2>
-          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI generates sentences from your bookmarked words</p>
-          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
-        </div>
       </div>
 
       {/* XP Info Modal */}
@@ -416,16 +427,6 @@ export default function LearnDashboard() {
                     <li>Type paragraphs or sentences using your new vocabulary.</li>
                     <li>The AI will check your grammar, spelling, and sentence structure.</li>
                     <li>You will receive detailed feedback, corrections, and suggestions for more natural phrasing.</li>
-                  </ul>
-                </>
-              )}
-              {activeFeatureModal === 'fill-blank' && (
-                <>
-                  <p>Contextual learning is the best way to master vocabulary!</p>
-                  <ul className="list-disc pl-5 space-y-2">
-                    <li>The AI generates completely new sentences using your bookmarked words.</li>
-                    <li>A word is hidden, and you must type or select the correct word to fill in the blank.</li>
-                    <li>This ensures you understand how words are actually used in real-life contexts, rather than just memorizing definitions.</li>
                   </ul>
                 </>
               )}

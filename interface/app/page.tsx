@@ -1,6 +1,7 @@
 import { DictionaryAPI } from "@/lib/dictionary-api";
 import SearchBar from "@/components/dictionary/SearchBar";
 import WordCard from "@/components/dictionary/WordCard";
+import RandomWordCard from "@/components/dictionary/RandomWordCard";
 
 // Server Component
 export default async function HomePage() {
@@ -44,7 +45,7 @@ export default async function HomePage() {
           <WordCard word={wordOfTheDay} title="Word of the Day" />
         )}
         {randomWord && (
-          <WordCard word={randomWord} title="Random Word" />
+          <RandomWordCard initialWord={randomWord} />
         )}
       </div>
     </div>

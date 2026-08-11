@@ -152,6 +152,11 @@ func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardRe
 		title = "Review Due Words"
 		desc = fmt.Sprintf("You have %d words waiting to be reviewed.", learningDash.DueToday)
 		count = learningDash.DueToday
+	} else if learningDash.PendingCount > 0 {
+		action = ActionLearnNew
+		title = "Continue Learning"
+		desc = fmt.Sprintf("You have %d new words you haven't finished learning.", learningDash.PendingCount)
+		count = learningDash.PendingCount
 	} else if learningDash.NewCount > 0 {
 		action = ActionLearnNew
 		title = "Learn New Words"
@@ -204,6 +209,8 @@ Return ONLY a JSON object with a "message" string field.`,
 		Statistics: DashboardStatistics{
 			WordsLearned: learningDash.LearnedCount,
 			ReviewsDue:   learningDash.DueToday,
+			PendingWords: learningDash.PendingCount,
+			NewWords:     learningDash.NewCount,
 			Accuracy:     accuracy,
 		},
 		Charts: charts,

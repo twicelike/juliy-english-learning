@@ -12,6 +12,7 @@ function WritingPlayContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode") || "new"; // "new" or "review"
+  const difficulty = searchParams.get("difficulty") || undefined;
   
   const { user } = useAuthStore();
   
@@ -28,16 +29,17 @@ function WritingPlayContent() {
   useEffect(() => {
     if (!user) return;
     loadMission();
-  }, [user, mode]);
+  }, [user, mode, difficulty]);
 
   const loadMission = async () => {
     setLoadingMission(true);
     try {
+      const apiDifficulty = difficulty === 'Random' ? undefined : difficulty;
       if (mode === "review") {
-        const data = await WritingAPI.getReviewMission();
+        const data = await WritingAPI.getReviewMission(undefined, apiDifficulty);
         setMission(data);
       } else {
-        const data = await WritingAPI.getNewMission();
+        const data = await WritingAPI.getNewMission(undefined, apiDifficulty);
         setMission(data);
       }
     } catch (err) {

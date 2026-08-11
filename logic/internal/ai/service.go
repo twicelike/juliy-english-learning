@@ -19,14 +19,16 @@ const cacheTTLGlobal = 24 * time.Hour
 type service struct {
 	client      AIClient
 	cache       Cache
+	explRepo    ExplanationRepo
 	rateLimiter RateLimiter
 }
 
 // NewService constructs an AITutorService with the given dependencies.
-func NewService(client AIClient, cache Cache, rateLimiter RateLimiter) AITutorService {
+func NewService(client AIClient, cache Cache, explRepo ExplanationRepo, rateLimiter RateLimiter) AITutorService {
 	return &service{
 		client:      client,
 		cache:       cache,
+		explRepo:    explRepo,
 		rateLimiter: rateLimiter,
 	}
 }
@@ -36,14 +38,16 @@ func NewService(client AIClient, cache Cache, rateLimiter RateLimiter) AITutorSe
 // -----------------------------------------------------------------------
 
 func (s *service) ExplainWord(ctx context.Context, pctx PromptContext) (*dto.ExplainResponse, error) {
-	key := globalKey("explain", pctx)
-	var resp dto.ExplainResponse
-	if hit, _ := s.cache.Get(ctx, key, &resp); hit {
-		slog.Info("AI cache hit", "key", key)
-		return &resp, nil
+	// 1. Try to fetch from database cache first
+	cached, err := s.explRepo.GetAIExplanation(ctx, pctx.Word, pctx.POS, pctx.UserLevel, pctx.NativeLanguage)
+	if err == nil && cached != nil {
+		slog.Info("AI DB cache hit", "word", pctx.Word, "level", pctx.UserLevel)
+		return &cached.Explanation, nil
 	}
 
+	// 2. Not in DB, generate with AI
 	prompt := prompts.BuildExplainPrompt(toPromptCtx(pctx))
+	var resp dto.ExplainResponse
 	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
 		return nil, fmt.Errorf("ai: explain word: %w", err)
 	}
@@ -51,7 +55,19 @@ func (s *service) ExplainWord(ctx context.Context, pctx PromptContext) (*dto.Exp
 		return nil, fmt.Errorf("%w: %s", ErrInvalidAIResponse, err)
 	}
 
-	_ = s.cache.Set(ctx, key, &resp, cacheTTLGlobal)
+	// 3. Save to database for future requests
+	expl := &dictionary.AIExplanation{
+		Word:           pctx.Word,
+		POS:            pctx.POS,
+		UserLevel:      pctx.UserLevel,
+		NativeLanguage: pctx.NativeLanguage,
+		Explanation:    resp,
+		CreatedAt:      time.Now().UTC(),
+	}
+	if err := s.explRepo.SaveAIExplanation(ctx, expl); err != nil {
+		slog.Error("Failed to save AI explanation to DB", "word", pctx.Word, "error", err)
+	}
+
 	return &resp, nil
 }
 

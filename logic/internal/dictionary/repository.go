@@ -10,13 +10,15 @@ import (
 )
 
 type repository struct {
-	coll *mongo.Collection
+	coll          *mongo.Collection
+	explColl      *mongo.Collection
 }
 
 // NewRepository creates a new dictionary repository.
 func NewRepository(db *mongo.Database) Repository {
 	return &repository{
-		coll: db.Collection("words"),
+		coll:     db.Collection("words"),
+		explColl: db.Collection("ai_explanations"),
 	}
 }
 
@@ -50,6 +52,46 @@ func (r *repository) SearchPrefix(ctx context.Context, prefix string, limit int)
 	}
 
 	return words, nil
+}
+
+// -----------------------------------------------------------------------------
+// AI Explanations Cache
+// -----------------------------------------------------------------------------
+
+func (r *repository) GetAIExplanation(ctx context.Context, word, pos, level, nativeLang string) (*AIExplanation, error) {
+	filter := bson.M{
+		"word":           word,
+		"pos":            pos,
+		"userLevel":      level,
+		"nativeLanguage": nativeLang,
+	}
+
+	var expl AIExplanation
+	err := r.explColl.FindOne(ctx, filter).Decode(&expl)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil // Cache miss
+		}
+		return nil, err
+	}
+
+	return &expl, nil
+}
+
+func (r *repository) SaveAIExplanation(ctx context.Context, expl *AIExplanation) error {
+	filter := bson.M{
+		"word":           expl.Word,
+		"pos":            expl.POS,
+		"userLevel":      expl.UserLevel,
+		"nativeLanguage": expl.NativeLanguage,
+	}
+	update := bson.M{
+		"$set": expl,
+	}
+	opts := options.UpdateOne().SetUpsert(true)
+
+	_, err := r.explColl.UpdateOne(ctx, filter, update, opts)
+	return err
 }
 
 func (r *repository) GetWord(ctx context.Context, word string) (*WordDocument, error) {
@@ -86,30 +128,32 @@ func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 }
 
 func (r *repository) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDocument, error) {
-	// Deterministic approach: hash the date string, create a pseudo-random ObjectID,
-	// and find the first document with _id >= this ObjectID.
+	// 1. Get total count of words
+	count, err := r.coll.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, nil
+	}
+
+	// 2. Hash the date string to get a deterministic integer
 	hash := md5.Sum([]byte(dateStr))
-	// An ObjectID is 12 bytes. We can just use the first 12 bytes of the MD5 hash.
-	var oid [12]byte
-	copy(oid[:], hash[:12])
+	var hashInt uint64
+	for i := 0; i < 8; i++ {
+		hashInt = (hashInt << 8) | uint64(hash[i])
+	}
 
-	objectID := bson.ObjectID(oid)
+	// 3. Modulo by total count to get offset
+	offset := int64(hashInt % uint64(count))
 
-	// First try to find a document with _id >= objectID
-	filter := bson.M{"_id": bson.M{"$gte": objectID}}
-	opts := options.FindOne().SetSort(bson.D{{Key: "_id", Value: 1}})
-
+	// 4. Find with skip
+	opts := options.FindOne().SetSkip(offset)
 	var doc WordDocument
-	err := r.coll.FindOne(ctx, filter, opts).Decode(&doc)
+	err = r.coll.FindOne(ctx, bson.M{}, opts).Decode(&doc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			// If we generated an ID larger than the max ID in the collection, wrap around.
-			optsWrap := options.FindOne().SetSort(bson.D{{Key: "_id", Value: 1}})
-			err = r.coll.FindOne(ctx, bson.M{}, optsWrap).Decode(&doc)
-			if err != nil {
-				return nil, err
-			}
-			return &doc, nil
+			return nil, nil
 		}
 		return nil, err
 	}
@@ -172,9 +216,8 @@ func (r *repository) GetDistractors(ctx context.Context, pos string, excludeID b
 		{Key: "senses.0.glosses.0", Value: bson.M{"$exists": true}},
 	}
 	pipeline := mongo.Pipeline{
-		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 200}}}}, // Sample 200 random words first for O(1) performance
 		{{Key: "$match", Value: filter}},
-		{{Key: "$limit", Value: n}},
+		{{Key: "$sample", Value: bson.D{{Key: "size", Value: n}}}},
 		{{Key: "$project", Value: bson.D{
 			{Key: "word", Value: 1},
 			{Key: "pos", Value: 1},

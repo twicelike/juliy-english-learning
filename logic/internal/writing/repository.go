@@ -14,6 +14,7 @@ type Repository struct {
 	db             *mongo.Database
 	missionsCol    *mongo.Collection
 	progressCol    *mongo.Collection
+	submissionsCol *mongo.Collection
 }
 
 func NewRepository(db *mongo.Database) *Repository {
@@ -21,6 +22,7 @@ func NewRepository(db *mongo.Database) *Repository {
 		db:             db,
 		missionsCol:    db.Collection("writing_missions"),
 		progressCol:    db.Collection("user_writing_progress"),
+		submissionsCol: db.Collection("writing_submissions"),
 	}
 }
 
@@ -64,7 +66,35 @@ func (r *Repository) EnsureIndexes(ctx context.Context) error {
 		return err
 	}
 
+	// writing_submissions indexes
+	submissionIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "user_id", Value: 1},
+				{Key: "created_at", Value: -1},
+			},
+		},
+	}
+
+	_, err = r.submissionsCol.Indexes().CreateMany(ctx, submissionIndexes)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create indexes for writing_submissions")
+		return err
+	}
+
 	return nil
+}
+
+// InsertSubmission logs a new attempt at a writing mission.
+func (r *Repository) InsertSubmission(ctx context.Context, sub *WritingSubmission) error {
+	if sub.ID.IsZero() {
+		sub.ID = bson.NewObjectID()
+	}
+	if sub.CreatedAt.IsZero() {
+		sub.CreatedAt = time.Now()
+	}
+	_, err := r.submissionsCol.InsertOne(ctx, sub)
+	return err
 }
 
 // GetMissionCountByGroup counts missions for a specific topic, scenario, and difficulty
@@ -304,6 +334,13 @@ func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID
 	
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: matchStage}},
+		{{Key: "$lookup", Value: bson.M{
+			"from":         "writing_missions",
+			"localField":   "mission_id",
+			"foreignField": "_id",
+			"as":           "mission",
+		}}},
+		{{Key: "$unwind", Value: "$mission"}},
 		{{Key: "$group", Value: bson.M{
 			"_id": nil,
 			"total_completed": bson.M{"$sum": 1},
@@ -317,6 +354,15 @@ func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID
 			"beginner": bson.M{"$sum": bson.M{
 				"$cond": []interface{}{bson.M{"$eq": []interface{}{"$mastery_level", "Beginner"}}, 1, 0},
 			}},
+			"completed_easy": bson.M{"$sum": bson.M{
+				"$cond": []interface{}{bson.M{"$eq": []interface{}{"$mission.difficulty", "Easy"}}, 1, 0},
+			}},
+			"completed_medium": bson.M{"$sum": bson.M{
+				"$cond": []interface{}{bson.M{"$eq": []interface{}{"$mission.difficulty", "Medium"}}, 1, 0},
+			}},
+			"completed_hard": bson.M{"$sum": bson.M{
+				"$cond": []interface{}{bson.M{"$eq": []interface{}{"$mission.difficulty", "Hard"}}, 1, 0},
+			}},
 		}}},
 	}
 
@@ -327,11 +373,14 @@ func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID
 	defer cursor.Close(ctx)
 
 	type aggResult struct {
-		TotalCompleted int     `bson:"total_completed"`
-		AverageScore   float64 `bson:"average_score"`
-		Mastered       int     `bson:"mastered"`
-		Familiar       int     `bson:"familiar"`
-		Beginner       int     `bson:"beginner"`
+		TotalCompleted  int     `bson:"total_completed"`
+		CompletedEasy   int     `bson:"completed_easy"`
+		CompletedMedium int     `bson:"completed_medium"`
+		CompletedHard   int     `bson:"completed_hard"`
+		AverageScore    float64 `bson:"average_score"`
+		Mastered        int     `bson:"mastered"`
+		Familiar        int     `bson:"familiar"`
+		Beginner        int     `bson:"beginner"`
 	}
 
 	var results []aggResult
@@ -343,10 +392,53 @@ func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID
 	if len(results) > 0 {
 		res := results[0]
 		stats.TotalCompleted = res.TotalCompleted
+		stats.CompletedEasy = res.CompletedEasy
+		stats.CompletedMedium = res.CompletedMedium
+		stats.CompletedHard = res.CompletedHard
 		stats.AverageScore = res.AverageScore
 		stats.MasteryMastered = res.Mastered
 		stats.MasteryFamiliar = res.Familiar
 		stats.MasteryBeginner = res.Beginner
+	}
+
+	// 2. Fetch Recent Submissions
+	stats.RecentSubmissions = make([]MissionHistoryDTO, 0)
+	recentPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"user_id": userID}}},
+		{{Key: "$sort", Value: bson.M{"created_at": -1}}},
+		{{Key: "$limit", Value: 5}},
+		{{Key: "$lookup", Value: bson.M{
+			"from":         "writing_missions",
+			"localField":   "mission_id",
+			"foreignField": "_id",
+			"as":           "mission",
+		}}},
+		{{Key: "$unwind", Value: "$mission"}},
+	}
+
+	recentCursor, err := r.submissionsCol.Aggregate(ctx, recentPipeline)
+	if err == nil {
+		defer recentCursor.Close(ctx)
+		type recentResult struct {
+			WritingSubmission `bson:",inline"`
+			Mission           WritingMission `bson:"mission"`
+		}
+		var recentDocs []recentResult
+		if err := recentCursor.All(ctx, &recentDocs); err == nil {
+			for _, doc := range recentDocs {
+				stats.RecentSubmissions = append(stats.RecentSubmissions, MissionHistoryDTO{
+					MissionID:        doc.MissionID.Hex(),
+					Topic:            doc.Mission.Topic,
+					Scenario:         doc.Mission.Scenario,
+					Vietnamese:       doc.Mission.Vietnamese,
+					UserContent:      doc.UserContent,
+					CorrectedVersion: doc.CorrectedVersion,
+					DetailedFeedback: doc.DetailedFeedback,
+					Score:            doc.Score,
+					CompletedAt:      doc.CreatedAt.Format(time.RFC3339),
+				})
+			}
+		}
 	}
 
 	return stats, nil

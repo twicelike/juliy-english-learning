@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LearningAPI, SessionItemDTO, ChoiceDTO } from "@/lib/learning-api";
 import { useAuthStore } from "@/store/auth-store";
 
-export default function QuizPage() {
+function QuizContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const type = searchParams.get("type");
+  const sessionId = searchParams.get("sessionId");
   const { user } = useAuthStore();
   const [cards, setCards] = useState<SessionItemDTO[]>([]);
   const [index, setIndex] = useState(0);
@@ -17,16 +20,42 @@ export default function QuizPage() {
 
   useEffect(() => {
     if (!user) { router.push("/login"); return; }
-    LearningAPI.getSession("quiz", 10)
-      .then((s) => {
-        if (s.items.length === 0) setDone(true);
-        else setCards(s.items);
-      })
-      .catch((e) => {
+
+    const loadSession = async () => {
+      try {
+        if (type === "new") {
+          const s = await LearningAPI.createSession("new_words", "multiple_choice");
+          router.replace(`/learn/quiz?sessionId=${s.id}`);
+          return;
+        } else if (type === "review") {
+          const s = await LearningAPI.createSession("review", "multiple_choice");
+          router.replace(`/learn/quiz?sessionId=${s.id}`);
+          return;
+        } else if (sessionId) {
+          const s = await LearningAPI.getSessionById(sessionId, "multiple_choice");
+          if (s.items.length === 0) setDone(true);
+          else {
+            setCards(s.items);
+            setIndex(s.current_index || 0);
+          }
+        } else {
+          // fallback
+          const s = await LearningAPI.getSession("quiz", 10);
+          if (s.items.length === 0) setDone(true);
+          else setCards(s.items);
+        }
+      } catch (e: any) {
         console.error("Failed to load quiz session:", e);
-      })
-      .finally(() => setLoading(false));
-  }, [user, router]);
+        if (e.response?.data?.error?.code === "NO_NEW_WORDS" || e.response?.data?.error?.code === "NO_DUE_WORDS") {
+          setDone(true);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSession();
+  }, [user, router, type, sessionId]);
 
   const handleSelect = useCallback(async (choiceIndex: number) => {
     if (selected !== null) return; // Already answered
@@ -134,5 +163,17 @@ export default function QuizPage() {
         </button>
       )}
     </div>
+  );
+}
+
+export default function QuizPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <QuizContent />
+    </Suspense>
   );
 }

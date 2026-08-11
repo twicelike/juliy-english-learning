@@ -2,6 +2,7 @@ import apiClient from "./api-client";
 
 export interface DashboardDTO {
   new: number;
+  pending: number;
   review: number;
   learned: number;
   due_today: number;
@@ -21,15 +22,29 @@ export interface SessionItemDTO {
   ipa: string;
   definitions: string[];
   example: string;
-  choices?: ChoiceDTO[];
+  choices: ChoiceDTO[]; // MCQ
+  fill_blank_question: string; // FB
+  fill_blank_answer: string; // FB
 }
 
+export type SessionStatus = "preparing" | "active" | "completed" | "expired";
+
 export interface SessionDTO {
-  mode: "flashcard" | "quiz";
+  id: string;
+  mode: "flashcard" | "quiz" | "new_words" | "review";
+  status: SessionStatus;
+  current_index: number;
   items: SessionItemDTO[];
 }
 
 export type ProgressQuality = 1 | 3 | 4 | 5;
+
+export interface WordResult {
+  word_id: string;
+  flashcard_quality: ProgressQuality;
+  multiple_choice_correct?: boolean;
+  fill_blank_correct?: boolean;
+}
 
 export const LearningAPI = {
   getDashboard: async (): Promise<DashboardDTO> => {
@@ -44,11 +59,25 @@ export const LearningAPI = {
     return res.data.data;
   },
 
-  submitProgress: async (wordId: string, quality: ProgressQuality, responseTimeMs?: number): Promise<void> => {
-    await apiClient.post("/learning/progress", { 
-      word_id: wordId, 
-      quality,
-      response_time_ms: responseTimeMs
-    });
+  createSession: async (mode: "new_words" | "review"): Promise<SessionDTO> => {
+    const res = await apiClient.post("/learning/session", { mode });
+    return res.data.data;
+  },
+
+  debugAdvanceTime: async (days: number = 1): Promise<void> => {
+    await apiClient.post("/learning/debug/advance-time", { days });
+  },
+
+  getSessionById: async (id: string): Promise<SessionDTO> => {
+    const res = await apiClient.get(`/learning/session/${id}`);
+    return res.data.data;
+  },
+
+  submitSessionResults: async (sessionId: string, results: WordResult[]): Promise<void> => {
+    await apiClient.post(`/learning/sessions/${sessionId}/submit`, { results });
+  },
+
+  suspendWord: async (wordId: string): Promise<void> => {
+    await apiClient.put(`/learning/progress/suspend/${wordId}`);
   },
 };

@@ -24,6 +24,8 @@ export interface DailyProgressDTO {
 export interface DashboardStatistics {
   words_learned: number;
   reviews_due: number;
+  pending_words: number;
+  new_words: number;
   accuracy: number;
 }
 

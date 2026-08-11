@@ -55,7 +55,8 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		{
 			words.GET("/search", dictHandler.Search)
 			words.GET("/detail/:word", dictHandler.GetDetail)
-			words.GET("/random", dictHandler.GetRandom)
+			// Apply rate limiter to random word to prevent spam (60 reqs/min)
+			words.GET("/random", middleware.IPRateLimiter(60), dictHandler.GetRandom)
 			words.GET("/word-of-the-day", dictHandler.GetWordOfTheDay)
 		}
 
@@ -94,19 +95,6 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		_ = gamiRepo.EnsureIndexes(ctx)
 		gamiService := gamification.NewService(gamiRepo)
 
-		// Learning
-		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
-		_ = learnRepo.EnsureIndexes(ctx)
-		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService)
-		learnHandler := learning.NewHandler(learnService)
-
-		learnRoutes := v1.Group("/learning")
-		learnRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
-		{
-			learnRoutes.GET("/dashboard", learnHandler.GetDashboard)
-			learnRoutes.GET("/session", learnHandler.GetSession)
-			learnRoutes.POST("/progress", learnHandler.SubmitProgress)
-		}
 		// AI Tutor
 		var rawAI ai.AIClient
 		var errAI error
@@ -127,9 +115,36 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			aiClientWrapped := aiclient.WithMetrics(aiclient.WithRetry(rawAI, 2))
 			aiCache := ai.NewMemoryCache()
 			aiLimiter := ai.NewMemoryRateLimiter(cfg.AIRateLimit)
-			aiService := ai.NewService(aiClientWrapped, aiCache, aiLimiter)
+			aiService := ai.NewService(aiClientWrapped, aiCache, dictRepo, aiLimiter)
 			aiHandler := ai.NewHandler(aiService, aiLimiter)
 			ai.RegisterRoutes(v1, aiHandler, cfg.JWTSecret)
+		}
+
+		// Learning
+		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = learnRepo.EnsureIndexes(ctx)
+		
+		exerciseContentRepo := learning.NewExerciseContentRepository(mongoClient.Database(cfg.MongoDB))
+		_ = exerciseContentRepo.EnsureIndexes(ctx)
+		
+		var exSvc learning.ExerciseContentService
+		if rawAI != nil && errAI == nil {
+			exSvc = learning.NewExerciseContentService(exerciseContentRepo, dictRepo, rawAI)
+		}
+
+		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc)
+		learnHandler := learning.NewHandler(learnService)
+
+		learnRoutes := v1.Group("/learning")
+		learnRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		{
+			learnRoutes.GET("/dashboard", learnHandler.GetDashboard)
+			learnRoutes.GET("/session", learnHandler.GetSession)
+			learnRoutes.POST("/session", learnHandler.CreateSession)
+			learnRoutes.GET("/session/:id", learnHandler.GetSessionByID)
+			learnRoutes.POST("/sessions/:id/submit", learnHandler.SubmitSessionResults)
+			learnRoutes.PUT("/progress/suspend/:word_id", learnHandler.SuspendWord)
+			learnRoutes.POST("/debug/advance-time", learnHandler.DebugAdvanceTime)
 		}
 
 		// Writing Missions (Phase 6.1 & 6.2)

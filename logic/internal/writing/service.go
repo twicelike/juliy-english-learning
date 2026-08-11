@@ -161,6 +161,20 @@ func (s *service) SubmitMission(ctx context.Context, userIDStr string, missionID
 		return nil, fmt.Errorf("failed to save progress: %w", err)
 	}
 
+	// Log the actual submission
+	submission := &WritingSubmission{
+		UserID:           userID,
+		MissionID:        missionID,
+		UserContent:      content,
+		CorrectedVersion: evalResp.CorrectedVersion,
+		DetailedFeedback: evalResp.DetailedFeedback,
+		Score:            evalResp.Score,
+	}
+	if err := s.repo.InsertSubmission(ctx, submission); err != nil {
+		// Log error but don't fail the request since progress was saved
+		fmt.Printf("failed to log submission history: %v\n", err)
+	}
+
 	if s.gamiSvc != nil {
 		// Fire and forget tracking
 		go s.gamiSvc.TrackWritingMission(context.Background(), userIDStr, evalResp.Score)

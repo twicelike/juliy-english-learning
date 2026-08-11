@@ -61,10 +61,27 @@ type CategoryScore struct {
 
 // DashboardStatsDTO is the summary for the Writing dashboard.
 type DashboardStatsDTO struct {
-	TotalCompleted   int     `json:"total_completed"`
-	AverageScore     float64 `json:"average_score"`
-	MasteryMastered  int     `json:"mastery_mastered"`
-	MasteryFamiliar  int     `json:"mastery_familiar"`
-	MasteryBeginner  int     `json:"mastery_beginner"`
+	TotalCompleted    int                 `json:"total_completed"`
+	CompletedEasy     int                 `json:"completed_easy"`
+	CompletedMedium   int                 `json:"completed_medium"`
+	CompletedHard     int                 `json:"completed_hard"`
+	AverageScore      float64             `json:"average_score"`
+	MasteryMastered   int                 `json:"mastery_mastered"`
+	MasteryFamiliar   int                 `json:"mastery_familiar"`
+	MasteryBeginner   int                 `json:"mastery_beginner"`
+	RecentSubmissions []MissionHistoryDTO `json:"recent_submissions"`
+}
+
+// MissionHistoryDTO represents a historical submission for the dashboard.
+type MissionHistoryDTO struct {
+	MissionID        string   `json:"mission_id"`
+	Topic            string   `json:"topic"`
+	Scenario         string   `json:"scenario"`
+	Vietnamese       []string `json:"prompt_vi"`
+	UserContent      string   `json:"user_content"`
+	CorrectedVersion string   `json:"corrected_version"`
+	DetailedFeedback string   `json:"detailed_feedback"`
+	Score            int      `json:"score"`
+	CompletedAt      string   `json:"completed_at"`
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/user"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 var (
@@ -22,15 +23,17 @@ type service struct {
 	userRepo  user.Repository
 	scheduler Scheduler
 	gamiSvc   gamification.Service
+	exSvc     ExerciseContentService
 }
 
-func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service) Service {
+func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service, exSvc ExerciseContentService) Service {
 	return &service{
 		repo:      repo,
 		dictRepo:  dictRepo,
 		userRepo:  userRepo,
 		scheduler: scheduler,
 		gamiSvc:   gamiSvc,
+		exSvc:     exSvc,
 	}
 }
 
@@ -170,83 +173,364 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 	return &SessionDTO{Mode: mode, Items: items}, nil
 }
 
-// SubmitProgress applies the Scheduler algorithm and upserts the progress document along with a review log.
-func (s *service) SubmitProgress(ctx context.Context, userID string, req *SubmitProgressRequest) error {
+func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*SessionDTO, error) {
+	uid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Check for active/preparing session
+	active, err := s.repo.GetActiveSession(ctx, uid, "new_words")
+	if err != nil {
+		return nil, err
+	}
+	if active != nil {
+		return s.buildSessionDTO(ctx, active)
+	}
+
+	// 2. Fetch up to 10 pending words
+	limit := 10
+	pendingIDs, err := s.repo.GetPendingWordIDs(ctx, uid, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. If pending < limit, fetch new available words
+	var newAvailableIDs []bson.ObjectID
+	if len(pendingIDs) < limit {
+		newLimit := limit - len(pendingIDs)
+		
+		bookmarks, err := s.userRepo.ListBookmarks(ctx, uid)
+		if err == nil && len(bookmarks) > 0 {
+			bookmarkWords := make([]string, 0, len(bookmarks))
+			for _, b := range bookmarks {
+				bookmarkWords = append(bookmarkWords, b.Word)
+			}
+			
+			wordDocs, _ := s.dictRepo.GetManyByWords(ctx, bookmarkWords)
+			
+			allWordIDs := make([]bson.ObjectID, 0)
+			seenWords := make(map[string]bool)
+			for i := range wordDocs {
+				w := wordDocs[i].Word
+				if seenWords[w] {
+					continue
+				}
+				seenWords[w] = true
+				allWordIDs = append(allWordIDs, wordDocs[i].ID)
+			}
+			
+			progressMap, _ := s.repo.GetProgressForWords(ctx, uid, allWordIDs)
+			for _, id := range allWordIDs {
+				if _, exists := progressMap[id]; !exists {
+					newAvailableIDs = append(newAvailableIDs, id)
+					if len(newAvailableIDs) == newLimit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(pendingIDs) == 0 && len(newAvailableIDs) == 0 {
+		return nil, errors.New("no_new_words")
+	}
+
+	// 4. Combine words for the session (Snapshot)
+	sessionWordIDs := append(pendingIDs, newAvailableIDs...)
+
+	now := time.Now()
+	// 5. Create session in "preparing" state. Do NOT create progress yet.
+	session := &LearningSession{
+		ID:           bson.NewObjectID(),
+		UserID:       uid,
+		Mode:         "new_words",
+		WordIDs:      sessionWordIDs,
+		CurrentIndex: 0,
+		Status:       SessionPreparing,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	err = s.repo.CreateSession(ctx, session)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			active, _ := s.repo.GetActiveSession(ctx, uid, "new_words")
+			if active != nil {
+				return s.buildSessionDTO(ctx, active)
+			}
+		}
+		return nil, err
+	}
+
+	// 6. Asynchronously trigger content preparation
+	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+		bgCtx := context.Background()
+		if s.exSvc != nil {
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+		}
+		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
+	}(session.ID, sessionWordIDs)
+
+	// 7. Build and return DTO (will show status "preparing")
+	return s.buildSessionDTO(ctx, session)
+}
+
+func (s *service) CreateReviewSession(ctx context.Context, userID string) (*SessionDTO, error) {
+	uid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Check for active/preparing session
+	active, err := s.repo.GetActiveSession(ctx, uid, "review")
+	if err != nil {
+		return nil, err
+	}
+	if active != nil {
+		return s.buildSessionDTO(ctx, active)
+	}
+
+	// 2. Fetch up to 20 due words
+	limit := 20
+	dueIDs, err := s.repo.GetDueWordIDs(ctx, uid, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(dueIDs) == 0 {
+		return nil, errors.New("no_due_words")
+	}
+
+	now := time.Now()
+	// 3. Create session in "preparing" state
+	session := &LearningSession{
+		ID:           bson.NewObjectID(),
+		UserID:       uid,
+		Mode:         "review",
+		WordIDs:      dueIDs,
+		CurrentIndex: 0,
+		Status:       SessionPreparing,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	err = s.repo.CreateSession(ctx, session)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			active, _ := s.repo.GetActiveSession(ctx, uid, "review")
+			if active != nil {
+				return s.buildSessionDTO(ctx, active)
+			}
+		}
+		return nil, err
+	}
+
+	// 4. Asynchronously trigger content preparation
+	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+		bgCtx := context.Background()
+		if s.exSvc != nil {
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+		}
+		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
+	}(session.ID, dueIDs)
+
+	// 5. Build and return DTO
+	return s.buildSessionDTO(ctx, session)
+}
+
+func (s *service) GetSessionByID(ctx context.Context, sessionID string) (*SessionDTO, error) {
+	sid, err := bson.ObjectIDFromHex(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := s.repo.GetSessionByID(ctx, sid)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, errors.New("session not found")
+	}
+
+	return s.buildSessionDTO(ctx, session)
+}
+
+func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession) (*SessionDTO, error) {
+	// Resolve dictionary words
+	wordDocs, err := s.dictRepo.GetManyByIDs(ctx, session.WordIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	wordDocByID := make(map[bson.ObjectID]*dictionary.WordDocument)
+	for i := range wordDocs {
+		wordDocByID[wordDocs[i].ID] = &wordDocs[i]
+	}
+	
+	// Fetch ONLY Fill Blank Exercises via AI
+	var fbExercises map[bson.ObjectID][]ExerciseContent
+	if s.exSvc != nil {
+		fbExercises, _ = s.exSvc.GetExercises(ctx, session.WordIDs, ExerciseFillBlank, 1)
+	}
+
+	items := make([]SessionItemDTO, 0, len(session.WordIDs))
+	for _, id := range session.WordIDs {
+		doc, ok := wordDocByID[id]
+		if !ok {
+			continue
+		}
+
+		item := buildSessionItem(doc)
+		
+		// Inject MCQ via Database (Fast, no AI tokens)
+		choices, err := s.buildQuizChoices(ctx, doc)
+		if err == nil {
+			item.Choices = choices
+		}
+
+		// Inject Fill Blank
+		if fbExercises != nil && len(fbExercises[id]) > 0 {
+			ex := fbExercises[id][0]
+			item.FillBlankQuestion = ex.Question
+			item.FillBlankAnswer = ex.Answer
+		}
+
+		items = append(items, item)
+	}
+
+	return &SessionDTO{
+		ID:           session.ID.Hex(),
+		Mode:         SessionMode(session.Mode),
+		Status:       session.Status,
+		CurrentIndex: session.CurrentIndex,
+		Items:        items,
+	}, nil
+}
+
+// SubmitSessionResults aggregates evidence and submits it in a transaction
+func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessionID string, req *SubmitSessionRequest) error {
 	uid, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
 		return err
 	}
-	wid, err := bson.ObjectIDFromHex(req.WordID)
+	sid, err := bson.ObjectIDFromHex(sessionID)
 	if err != nil {
 		return err
 	}
 
-	// Verify word exists
-	wordDoc, err := s.dictRepo.GetByID(ctx, wid)
+	// 1. Fetch the session
+	session, err := s.repo.GetSessionByID(ctx, sid)
 	if err != nil {
 		return err
 	}
-	if wordDoc == nil {
-		return ErrWordNotFound
+	if session == nil {
+		return errors.New("session not found")
 	}
 
-	// Get current progress
-	existing, err := s.repo.GetProgress(ctx, uid, wid)
+	// 2. Idempotency Check: if already completed, just return success
+	if session.Status == SessionCompleted {
+		return nil
+	}
+	if session.Status != SessionActive {
+		return errors.New("session is not active")
+	}
+
+	// Make sure user owns it
+	if session.UserID != uid {
+		return errors.New("unauthorized session access")
+	}
+
+	now := time.Now().UTC()
+	var progresses []*LearningProgress
+	var reviews []*Review
+	totalXP := 0
+	
+	// Pre-fetch all progresses for these words to update them
+	wordIDs := make([]bson.ObjectID, len(req.Results))
+	for i, r := range req.Results {
+		w, _ := bson.ObjectIDFromHex(r.WordID)
+		wordIDs[i] = w
+	}
+	progressMap, err := s.repo.GetProgressForWords(ctx, uid, wordIDs)
 	if err != nil {
 		return err
 	}
 
-	var p *LearningProgress
-	if existing != nil {
-		p = existing
-	} else {
-		// New word
-		p = &LearningProgress{
-			UserID:    uid,
-			WordID:    wid,
-			CreatedAt: time.Now(),
+	// 3. Process each result
+	for _, res := range req.Results {
+		wid, err := bson.ObjectIDFromHex(res.WordID)
+		if err != nil {
+			continue
+		}
+
+		// A. Evaluate Evidence
+		assessment := EvaluateLearningEvidence(res)
+		
+		// B. Retrieve or create Progress
+		p, exists := progressMap[wid]
+		if !exists {
+			p = &LearningProgress{
+				ID:        bson.NewObjectID(),
+				UserID:    uid,
+				WordID:    wid,
+				CreatedAt: now,
+			}
+		}
+
+		// C. Scheduler Calculation using Final Quality
+		quality := Quality(assessment.FinalQuality)
+		nextP := s.scheduler.CalculateNext(p, quality)
+		nextP.UpdatedAt = now
+		progresses = append(progresses, nextP)
+
+		// D. Build Review Log
+		rev := &Review{
+			ID:             bson.NewObjectID(),
+			UserID:         uid,
+			WordID:         wid,
+			Quality:        quality,
+			OldInterval:    p.Interval,
+			NewInterval:    nextP.Interval,
+			OldEF:          p.EaseFactor,
+			NewEF:          nextP.EaseFactor,
+			OldRepetition:  p.Repetition,
+			NewRepetition:  nextP.Repetition,
+			ReviewedAt:     now,
+		}
+		reviews = append(reviews, rev)
+
+		// E. Gamification points:
+		// Example: 10 XP per word learned/reviewed correctly
+		if quality >= QualityHard {
+			totalXP += 10
 		}
 	}
 
-	// Calculate next state
-	nextP := s.scheduler.CalculateNext(p, req.Quality)
-
-	// Build Review log
-	rev := &Review{
-		UserID:         uid,
-		WordID:         wid,
-		Quality:        req.Quality,
-		ResponseTimeMs: req.ResponseTimeMs,
-		OldInterval:    p.Interval,
-		NewInterval:    nextP.Interval,
-		OldEF:          p.EaseFactor,
-		NewEF:          nextP.EaseFactor,
-		OldRepetition:  p.Repetition,
-		NewRepetition:  nextP.Repetition,
-		ReviewedAt:     nextP.LastReviewDate,
-	}
-
-	err = s.repo.UpsertProgressAndLog(ctx, nextP, rev)
+	// 4. Commit Transaction
+	err = s.repo.SubmitSessionWithTransaction(ctx, sid, progresses, reviews, totalXP)
 	if err != nil {
 		return err
 	}
 
-	// Track Gamification
-	isNewWord := (existing == nil)
-	isCorrect := (req.Quality >= QualityHard)
-
-	// Fire and forget, or at least don't block progress submission
-	if s.gamiSvc != nil {
-		act := gamification.ActivityReview
-		if isNewWord {
-			act = gamification.ActivityLearnNew
-		}
-		// Assuming we don't know if it's quiz or flashcard from this generic endpoint, default to review/learn
-		// Hardcode daily goal 20 for now, could be fetched from user profile in the future.
-		_ = s.gamiSvc.TrackActivity(ctx, userID, act, isCorrect, 20)
+	// 5. Update Gamification async
+	if s.gamiSvc != nil && totalXP > 0 {
+		go func() {
+			bgCtx := context.Background()
+			_ = s.gamiSvc.TrackActivity(bgCtx, userID, gamification.ActivityReview, true, totalXP)
+		}()
 	}
 
 	return nil
+}
+
+func (s *service) DebugAdvanceTime(ctx context.Context, userID string, days int) error {
+	oid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user id")
+	}
+	return s.repo.DebugAdvanceTime(ctx, oid, days)
 }
 
 // -----------------------------------------------------------------------------

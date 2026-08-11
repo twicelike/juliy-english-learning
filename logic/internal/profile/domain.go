@@ -63,6 +63,8 @@ type RecommendationResponse struct {
 type DashboardStatistics struct {
 	WordsLearned int `json:"words_learned"`
 	ReviewsDue   int `json:"reviews_due"`
+	PendingWords int `json:"pending_words"`
+	NewWords     int `json:"new_words"`
 	Accuracy     int `json:"accuracy"` // e.g. 85
 }
 

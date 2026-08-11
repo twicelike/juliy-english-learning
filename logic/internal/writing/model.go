@@ -43,6 +43,17 @@ type UserWritingProgress struct {
 	UpdatedAt        time.Time     `bson:"updated_at" json:"updated_at"`
 }
 
+type WritingSubmission struct {
+	ID               bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID           bson.ObjectID `bson:"user_id" json:"user_id"`
+	MissionID        bson.ObjectID `bson:"mission_id" json:"mission_id"`
+	UserContent      string        `bson:"user_content" json:"user_content"`
+	CorrectedVersion string        `bson:"corrected_version" json:"corrected_version"`
+	DetailedFeedback string        `bson:"detailed_feedback" json:"detailed_feedback"`
+	Score            int           `bson:"score" json:"score"`
+	CreatedAt        time.Time     `bson:"created_at" json:"created_at"`
+}
+
 // Config lists for generation
 var SupportedTopics = []string{
 	"Daily Life", "Education", "Work", "Travel",
