@@ -7,6 +7,7 @@ export interface DefinitionDTO {
 }
 
 export interface WordDTO {
+  id: string;
   word: string;
   pos: string;
   ipa: string;

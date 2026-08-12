@@ -26,15 +26,15 @@ function FillBlankContent() {
     const loadSession = async () => {
       try {
         if (type === "new") {
-          const s = await LearningAPI.createSession("new_words", "fill_blank");
+          const s = await LearningAPI.createSession("new_words");
           router.replace(`/learn/fill-blank?sessionId=${s.id}`);
           return;
         } else if (type === "review") {
-          const s = await LearningAPI.createSession("review", "fill_blank");
+          const s = await LearningAPI.createSession("review");
           router.replace(`/learn/fill-blank?sessionId=${s.id}`);
           return;
         } else if (sessionId) {
-          const s = await LearningAPI.getSessionById(sessionId, "fill_blank");
+          const s = await LearningAPI.getSessionById(sessionId);
           if (s.items.length === 0) setDone(true);
           else {
             setCards(s.items);
@@ -71,7 +71,8 @@ function FillBlankContent() {
     if (correct) setScore((s) => s + 1);
 
     try {
-      await LearningAPI.submitProgress(card.word_id, correct ? 4 : 1, undefined, sessionId || undefined);
+      // Standalone mode is being phased out in favor of unified session.
+      // await LearningAPI.submitProgress(card.word_id, correct ? 4 : 1, undefined, sessionId || undefined);
     } catch (e) { console.error(e); }
   }, [answer, submitted, cards, index, sessionId]);
 

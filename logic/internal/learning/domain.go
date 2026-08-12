@@ -112,6 +112,23 @@ type Scheduler interface {
 	CalculateNext(p *LearningProgress, q Quality) *LearningProgress
 }
 
+// DetermineState determines the word progress state for viewers
+func DetermineState(p *LearningProgress) string {
+	if p == nil {
+		return "new"
+	}
+
+	if !p.NextReviewDate.After(time.Now().UTC()) {
+		return "due"
+	}
+
+	if p.Interval >= 21 {
+		return "mastered"
+	}
+
+	return "learning"
+}
+
 // -----------------------------------------------------------------------------
 // DTOs (Data Transfer Objects)
 // -----------------------------------------------------------------------------

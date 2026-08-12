@@ -366,7 +366,7 @@ export default function LearnDashboard() {
             </div>
             
             <div className="mt-6 text-sm text-white/50 bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20">
-              <p>Keep your daily streak alive and complete your daily goals to rank up your CEFR level faster! The more XP you earn, the higher your level becomes.</p>
+              <p>Keep your daily streak alive and complete your daily goals to level up faster! The more XP you earn, the higher your level becomes.</p>
             </div>
             
             <button 

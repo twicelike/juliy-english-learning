@@ -51,6 +51,7 @@ type RelatedDoc struct {
 // -----------------------------------------------------------------------------
 
 type WordDTO struct {
+	ID          string          `json:"id"`
 	Word        string          `json:"word"`
 	POS         string          `json:"pos"`
 	IPA         string          `json:"ipa"` // Derived from the first sound containing IPA
@@ -101,6 +102,7 @@ type Repository interface {
 type Service interface {
 	Search(ctx context.Context, query string) ([]WordDTO, error)
 	GetDetail(ctx context.Context, word string) (*WordDTO, error)
+	GetManyByIDs(ctx context.Context, ids []bson.ObjectID) ([]WordDTO, error)
 	GetRandom(ctx context.Context) (*WordDTO, error)
 	GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDTO, error)
 }

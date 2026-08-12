@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/english/backend/internal/ai"
 	aiclient "github.com/english/backend/internal/ai/client"
@@ -15,6 +16,7 @@ import (
 	"github.com/english/backend/internal/middleware"
 	"github.com/english/backend/internal/profile"
 	"github.com/english/backend/internal/user"
+	"github.com/english/backend/internal/wordset"
 	"github.com/english/backend/internal/writing"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -95,6 +97,35 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		_ = gamiRepo.EnsureIndexes(ctx)
 		gamiService := gamification.NewService(gamiRepo)
 
+		// Word Set (WS1 & WS2 & WS6)
+		wordSetRepo := wordset.NewRepository(mongoClient.Database(cfg.MongoDB))
+		if err := wordSetRepo.EnsureIndexes(ctx); err != nil {
+			panic(fmt.Errorf("ensure word set indexes: %w", err))
+		}
+		
+		// Learn Repo (needed for progress checking in WS6)
+		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = learnRepo.EnsureIndexes(ctx)
+
+		wordSetService := wordset.NewService(wordSetRepo, dictService, learnRepo)
+		wordSetHandler := wordset.NewHandler(wordSetService)
+
+		wordSetRoutes := v1.Group("/word-sets")
+		wordSetRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		{
+			wordSetRoutes.POST("", wordSetHandler.Create)
+			wordSetRoutes.GET("", wordSetHandler.List)
+			wordSetRoutes.GET("/:id", wordSetHandler.Get)
+			wordSetRoutes.PATCH("/:id", wordSetHandler.Update)
+			wordSetRoutes.DELETE("/:id", wordSetHandler.Delete)
+			
+			wordSetRoutes.GET("/:id/words", wordSetHandler.GetWords)
+			wordSetRoutes.POST("/:id/words", wordSetHandler.AddWord)
+			wordSetRoutes.POST("/:id/words/bulk", wordSetHandler.BulkAddWords)
+			wordSetRoutes.DELETE("/:id/words/:wordId", wordSetHandler.RemoveWord)
+			wordSetRoutes.PATCH("/:id/words/reorder", wordSetHandler.ReorderWords)
+		}
+
 		// AI Tutor
 		var rawAI ai.AIClient
 		var errAI error
@@ -121,8 +152,6 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		}
 
 		// Learning
-		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
-		_ = learnRepo.EnsureIndexes(ctx)
 		
 		exerciseContentRepo := learning.NewExerciseContentRepository(mongoClient.Database(cfg.MongoDB))
 		_ = exerciseContentRepo.EnsureIndexes(ctx)

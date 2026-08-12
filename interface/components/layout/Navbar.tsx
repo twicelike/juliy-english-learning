@@ -57,6 +57,9 @@ export default function Navbar() {
               <Link href="/learn" className="text-sm text-white/70 hover:text-white transition-colors">
                 Study
               </Link>
+              <Link href="/word-sets" className="text-sm text-white/70 hover:text-white transition-colors">
+                Word Sets
+              </Link>
               <Link
                 href="/profile"
                 className="px-4 py-2 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"

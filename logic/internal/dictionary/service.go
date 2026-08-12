@@ -2,6 +2,8 @@ package dictionary
 
 import (
 	"context"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type service struct {
@@ -44,6 +46,35 @@ func (s *service) GetDetail(ctx context.Context, word string) (*WordDTO, error) 
 	
 	dto := mapDocsToDTO(docs)
 	return &dto, nil
+}
+
+func (s *service) GetManyByIDs(ctx context.Context, ids []bson.ObjectID) ([]WordDTO, error) {
+	if len(ids) == 0 {
+		return []WordDTO{}, nil
+	}
+
+	docs, err := s.repo.GetManyByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	docMap := make(map[bson.ObjectID]WordDocument)
+	for _, doc := range docs {
+		docMap[doc.ID] = doc
+	}
+
+	var dtos []WordDTO
+	for _, id := range ids {
+		if doc, ok := docMap[id]; ok {
+			dtos = append(dtos, mapToDTO(&doc))
+		} else {
+			// Log missing word (data integrity issue)
+			// For now, we just skip it, but in production we might want to log this properly.
+			continue
+		}
+	}
+
+	return dtos, nil
 }
 
 func (s *service) GetRandom(ctx context.Context) (*WordDTO, error) {
@@ -89,6 +120,7 @@ func (s *service) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDTO
 // mapToDTO converts a WordDocument to a WordDTO exactly matching the frontend needs.
 func mapToDTO(doc *WordDocument) WordDTO {
 	dto := WordDTO{
+		ID:          doc.ID.Hex(),
 		Word:        doc.Word,
 		POS:         doc.POS,
 		Forms:       []string{},
@@ -154,6 +186,7 @@ func mapDocsToDTO(docs []WordDocument) WordDTO {
 	}
 
 	dto := WordDTO{
+		ID:          docs[0].ID.Hex(),
 		Word:        docs[0].Word,
 		Forms:       []string{},
 		Definitions: []DefinitionDTO{},
