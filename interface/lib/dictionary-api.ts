@@ -1,6 +1,7 @@
 import apiClient from "./api-client";
 
 export interface DefinitionDTO {
+  partOfSpeech?: string;
   definition: string;
   examples: string[];
 }
@@ -9,6 +10,7 @@ export interface WordDTO {
   word: string;
   pos: string;
   ipa: string;
+  audio?: string;
   forms: string[];
   definitions: DefinitionDTO[];
   antonyms: string[];

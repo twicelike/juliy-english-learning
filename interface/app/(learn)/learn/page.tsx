@@ -261,15 +261,15 @@ export default function LearnDashboard() {
         </div>
         <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
           <button 
-            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('quiz'); }}
+            onClick={(e) => { e.preventDefault(); setActiveFeatureModal('review'); }}
             className="absolute top-4 right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-xs text-white/60 hover:text-white transition-colors z-10"
-            title="How to use Quiz"
+            title="How to review words"
           >i</button>
           <Link href="/learn/session?mode=review" className="absolute inset-0 z-0"></Link>
           <div className="text-3xl relative z-10 pointer-events-none">🧠</div>
           <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Review Due Words</h2>
           <p className="text-white/50 text-sm relative z-10 pointer-events-none">Keep your memory fresh with a unified review session</p>
-          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start quiz →</span>
+          <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start review →</span>
         </div>
         <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
           <button 
@@ -386,7 +386,7 @@ export default function LearnDashboard() {
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 {activeFeatureModal === 'flashcard' && <><span className="text-xl">🃏</span> Flashcards Guide</>}
-                {activeFeatureModal === 'quiz' && <><span className="text-xl">🧠</span> Quiz Guide</>}
+                {activeFeatureModal === 'review' && <><span className="text-xl">🧠</span> Review Guide</>}
                 {activeFeatureModal === 'writing' && <><span className="text-xl">✏️</span> Writing Lab Guide</>}
                 {activeFeatureModal === 'fill-blank' && <><span className="text-xl">🤖</span> AI Fill-in Guide</>}
               </h3>
@@ -410,13 +410,13 @@ export default function LearnDashboard() {
                   </ul>
                 </>
               )}
-              {activeFeatureModal === 'quiz' && (
+              {activeFeatureModal === 'review' && (
                 <>
-                  <p>Test your knowledge with multiple-choice questions!</p>
+                  <p>Review your words with a unified session designed for maximum retention!</p>
                   <ul className="list-disc pl-5 space-y-2">
-                    <li>The system generates questions based on your saved words.</li>
-                    <li>Distractors (wrong answers) are intelligently chosen to be the same part-of-speech to challenge your understanding.</li>
-                    <li>Completing quizzes helps reinforce your memory and earns you XP.</li>
+                    <li>The system tests your memory through a combination of Flashcards, Quizzes, and Contextual Fill-in-the-blanks.</li>
+                    <li>Questions adapt to your proficiency—hard words are tested more rigorously, while easy words are spaced further apart.</li>
+                    <li>Completing a review session reinforces your memory and earns you XP.</li>
                   </ul>
                 </>
               )}

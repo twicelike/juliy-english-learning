@@ -107,6 +107,21 @@ func (r *repository) GetWord(ctx context.Context, word string) (*WordDocument, e
 	return &doc, nil
 }
 
+func (r *repository) GetWords(ctx context.Context, word string) ([]WordDocument, error) {
+	filter := bson.M{"word": word}
+	cursor, err := r.coll.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	var docs []WordDocument
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
 func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 1}}}},

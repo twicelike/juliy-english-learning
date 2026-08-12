@@ -34,15 +34,15 @@ func (s *service) Search(ctx context.Context, query string) ([]WordDTO, error) {
 }
 
 func (s *service) GetDetail(ctx context.Context, word string) (*WordDTO, error) {
-	doc, err := s.repo.GetWord(ctx, word)
+	docs, err := s.repo.GetWords(ctx, word)
 	if err != nil {
 		return nil, err
 	}
-	if doc == nil {
+	if len(docs) == 0 {
 		return nil, nil // Not found
 	}
 	
-	dto := mapToDTO(doc)
+	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
 
@@ -55,7 +55,14 @@ func (s *service) GetRandom(ctx context.Context) (*WordDTO, error) {
 		return nil, nil
 	}
 	
-	dto := mapToDTO(doc)
+	// Fetch all POS variants for this random word
+	docs, err := s.repo.GetWords(ctx, doc.Word)
+	if err != nil || len(docs) == 0 {
+		dto := mapToDTO(doc)
+		return &dto, nil
+	}
+	
+	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
 
@@ -68,7 +75,14 @@ func (s *service) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDTO
 		return nil, nil
 	}
 	
-	dto := mapToDTO(doc)
+	// Fetch all POS variants for this word of the day
+	docs, err := s.repo.GetWords(ctx, doc.Word)
+	if err != nil || len(docs) == 0 {
+		dto := mapToDTO(doc)
+		return &dto, nil
+	}
+	
+	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
 
@@ -83,11 +97,13 @@ func mapToDTO(doc *WordDocument) WordDTO {
 		Synonyms:    []string{},
 	}
 
-	// 1. Extract IPA (first sound with ipa)
+	// 1. Extract IPA and Audio (first available)
 	for _, sound := range doc.Sounds {
-		if sound.IPA != "" {
+		if sound.IPA != "" && dto.IPA == "" {
 			dto.IPA = sound.IPA
-			break
+		}
+		if sound.Audio != "" && dto.Audio == "" {
+			dto.Audio = sound.Audio
 		}
 	}
 
@@ -100,12 +116,18 @@ func mapToDTO(doc *WordDocument) WordDTO {
 	for _, sense := range doc.Senses {
 		for _, gloss := range sense.Glosses {
 			defDTO := DefinitionDTO{
-				Definition: gloss,
-				Examples:   []string{},
+				PartOfSpeech: doc.POS,
+				Definition:   gloss,
+				Examples:     []string{},
 			}
+			count := 0
 			for _, ex := range sense.Examples {
 				if ex.Text != "" {
 					defDTO.Examples = append(defDTO.Examples, ex.Text)
+					count++
+					if count >= 2 {
+						break
+					}
 				}
 			}
 			dto.Definitions = append(dto.Definitions, defDTO)
@@ -121,6 +143,109 @@ func mapToDTO(doc *WordDocument) WordDTO {
 	for _, syn := range doc.Synonyms {
 		dto.Synonyms = append(dto.Synonyms, syn.Word)
 	}
+
+	return dto
+}
+
+// mapDocsToDTO merges multiple documents of the same word (e.g. different POS) into a single WordDTO.
+func mapDocsToDTO(docs []WordDocument) WordDTO {
+	if len(docs) == 0 {
+		return WordDTO{}
+	}
+
+	dto := WordDTO{
+		Word:        docs[0].Word,
+		Forms:       []string{},
+		Definitions: []DefinitionDTO{},
+		Antonyms:    []string{},
+		Synonyms:    []string{},
+	}
+
+	formSet := make(map[string]bool)
+	antonymSet := make(map[string]bool)
+	synonymSet := make(map[string]bool)
+	
+	var posList []string
+	posSet := make(map[string]bool)
+
+	for _, doc := range docs {
+		if doc.POS != "" && !posSet[doc.POS] {
+			posSet[doc.POS] = true
+			posList = append(posList, doc.POS)
+		}
+
+		// 1. Extract IPA and Audio (first available across all docs)
+		for _, sound := range doc.Sounds {
+			if sound.IPA != "" && dto.IPA == "" {
+				dto.IPA = sound.IPA
+			}
+			if sound.Audio != "" && dto.Audio == "" {
+				dto.Audio = sound.Audio
+			}
+		}
+
+		// 2. Extract Forms
+		for _, form := range doc.Forms {
+			if !formSet[form.Form] {
+				formSet[form.Form] = true
+				dto.Forms = append(dto.Forms, form.Form)
+			}
+		}
+
+		// 3. Extract Definitions and Examples
+		for _, sense := range doc.Senses {
+			for _, gloss := range sense.Glosses {
+				defDTO := DefinitionDTO{
+					PartOfSpeech: doc.POS,
+					Definition:   gloss,
+					Examples:     []string{},
+				}
+				count := 0
+				for _, ex := range sense.Examples {
+					if ex.Text != "" {
+						defDTO.Examples = append(defDTO.Examples, ex.Text)
+						count++
+						if count >= 2 {
+							break
+						}
+					}
+				}
+				dto.Definitions = append(dto.Definitions, defDTO)
+			}
+		}
+
+		// 4. Extract Antonyms
+		for _, ant := range doc.Antonyms {
+			if !antonymSet[ant.Word] {
+				antonymSet[ant.Word] = true
+				dto.Antonyms = append(dto.Antonyms, ant.Word)
+			}
+		}
+
+		// 5. Extract Synonyms
+		for _, syn := range doc.Synonyms {
+			if !synonymSet[syn.Word] {
+				synonymSet[syn.Word] = true
+				dto.Synonyms = append(dto.Synonyms, syn.Word)
+			}
+		}
+	}
+
+	// Join all POS together
+	importStrings := false
+	if len(posList) > 0 {
+		importStrings = true
+	}
+	_ = importStrings
+	// I will just use string concatenation to avoid needing to import strings if it's not imported
+	posStr := ""
+	for i, p := range posList {
+		if i > 0 {
+			posStr += ", "
+		}
+		posStr += p
+	}
+	dto.POS = posStr
 
 	return dto
 }

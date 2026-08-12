@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { WordDTO } from "@/lib/dictionary-api";
+import AudioButton from "./AudioButton";
 
 interface WordCardProps {
   word: WordDTO;
@@ -40,9 +41,10 @@ export default function WordCard({ word, title = "Word of the Day", onReload, is
       
       <div className={`mb-4 transition-opacity ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
         <h4 className="text-3xl font-bold text-white mb-2">{word.word}</h4>
-        <div className="flex gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           {word.pos && <span className="text-indigo-300">{word.pos}</span>}
           {word.ipa && <span className="text-white/40">{word.ipa}</span>}
+          {word.audio && <AudioButton audioUrl={word.audio} />}
         </div>
       </div>
       

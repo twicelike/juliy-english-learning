@@ -6,6 +6,19 @@ import { AuthAPI } from "@/lib/auth-api";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
 import AITutor from "@/components/dictionary/AITutor";
+import AudioButton from "./AudioButton";
+
+const getPosColor = (pos: string | undefined) => {
+  if (!pos) return { bg: "bg-indigo-500/20", text: "text-indigo-300", border: "border-indigo-500/30", bar: "bg-indigo-500" };
+  const p = pos.toLowerCase();
+  if (p.includes("noun")) return { bg: "bg-blue-500/20", text: "text-blue-300", border: "border-blue-500/30", bar: "bg-blue-500" };
+  if (p.includes("verb")) return { bg: "bg-rose-500/20", text: "text-rose-300", border: "border-rose-500/30", bar: "bg-rose-500" };
+  if (p.includes("adj")) return { bg: "bg-emerald-500/20", text: "text-emerald-300", border: "border-emerald-500/30", bar: "bg-emerald-500" };
+  if (p.includes("adv")) return { bg: "bg-amber-500/20", text: "text-amber-300", border: "border-amber-500/30", bar: "bg-amber-500" };
+  if (p.includes("prep")) return { bg: "bg-purple-500/20", text: "text-purple-300", border: "border-purple-500/30", bar: "bg-purple-500" };
+  if (p.includes("conj")) return { bg: "bg-pink-500/20", text: "text-pink-300", border: "border-pink-500/30", bar: "bg-pink-500" };
+  return { bg: "bg-indigo-500/20", text: "text-indigo-300", border: "border-indigo-500/30", bar: "bg-indigo-500" };
+};
 
 interface WordDetailProps {
   word: WordDTO;
@@ -15,7 +28,7 @@ export default function WordDetail({ word }: WordDetailProps) {
   const [showAll, setShowAll] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [loadingBookmark, setLoadingBookmark] = useState(false);
-  
+
   const { user } = useAuthStore();
   const router = useRouter();
 
@@ -26,7 +39,7 @@ export default function WordDetail({ word }: WordDetailProps) {
         .then((bookmarks) => {
           setIsBookmarked(bookmarks.some((b) => b.word === word.word));
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user, word.word]);
 
@@ -56,6 +69,14 @@ export default function WordDetail({ word }: WordDetailProps) {
   const hasMore = word.definitions.length > initialDefCount;
   const displayedDefs = showAll ? word.definitions : word.definitions.slice(0, initialDefCount);
 
+  // Group definitions by POS
+  const groupedDefs = displayedDefs.reduce((acc, def) => {
+    const pos = def.partOfSpeech || 'other';
+    if (!acc[pos]) acc[pos] = [];
+    acc[pos].push(def);
+    return acc;
+  }, {} as Record<string, typeof displayedDefs>);
+
   return (
     <div className="w-full max-w-3xl mx-auto p-6 md:p-10 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md shadow-2xl">
       {/* Header: Word, POS, IPA */}
@@ -64,25 +85,29 @@ export default function WordDetail({ word }: WordDetailProps) {
           {word.word}
         </h1>
         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-          {word.pos && (
-            <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-sm font-medium border border-indigo-500/30">
-              {word.pos}
-            </span>
-          )}
+          {word.pos && word.pos.split(', ').map((p, idx) => {
+            const colors = getPosColor(p);
+            return (
+              <span key={idx} className={`px-3 py-1 rounded-full ${colors.bg} ${colors.text} text-sm font-medium border ${colors.border} uppercase tracking-wider`}>
+                {p}
+              </span>
+            );
+          })}
           {word.ipa && (
-            <span className="text-white/60 font-mono text-lg">
+            <span className="text-white/60 font-mono text-lg flex items-center gap-2">
               {word.ipa}
+              {word.audio && <AudioButton audioUrl={word.audio} />}
             </span>
           )}
-          
+          {!word.ipa && word.audio && <AudioButton audioUrl={word.audio} />}
+
           <button
             onClick={toggleBookmark}
             disabled={loadingBookmark}
-            className={`ml-4 p-2 rounded-full border transition-all ${
-              isBookmarked 
-                ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-400" 
-                : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white"
-            }`}
+            className={`ml-4 p-2 rounded-full border transition-all ${isBookmarked
+              ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-400"
+              : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white"
+              }`}
             title={isBookmarked ? "Remove from saved words" : "Save word"}
           >
             <svg className="w-5 h-5" fill={isBookmarked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
@@ -94,8 +119,8 @@ export default function WordDetail({ word }: WordDetailProps) {
 
       {/* Forms */}
       {word.forms.length > 0 && (
-        <div className="mb-10 p-4 rounded-2xl bg-black/20 border border-white/5">
-          <h3 className="text-sm text-white/40 uppercase tracking-widest mb-3 font-semibold">Other Forms</h3>
+        <div className="mb-7 p-3 rounded-2xl bg-black/20 border border-white/5">
+          <h3 className="text-white/40 uppercase tracking-widest mb-2 font-semibold text-xs">Other Forms</h3>
           <div className="flex flex-wrap gap-2">
             {word.forms.map((f, i) => (
               <span key={i} className="px-3 py-1.5 rounded-lg bg-white/5 text-white/80 text-sm">
@@ -108,30 +133,40 @@ export default function WordDetail({ word }: WordDetailProps) {
 
       {/* Meanings */}
       <div className="mb-10">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <span className="w-6 h-1 bg-indigo-500 rounded-full"></span>
-          Meanings
-        </h2>
-        
-        <div className="space-y-8">
-          {displayedDefs.map((def, idx) => (
-            <div key={idx} className="group">
-              <p className="text-white/90 text-lg leading-relaxed mb-3">
-                <span className="text-indigo-400 font-bold mr-2">{idx + 1}.</span>
-                {def.definition}
-              </p>
-              
-              {def.examples.length > 0 && (
-                <div className="pl-6 border-l-2 border-white/10 space-y-2 mt-3">
-                  {def.examples.map((ex, i) => (
-                    <p key={i} className="text-white/50 text-base italic">
-                      "{ex}"
-                    </p>
+
+        <div className="space-y-10">
+          {Object.entries(groupedDefs).map(([pos, defs]) => {
+            const colors = getPosColor(pos);
+            return (
+              <div key={pos} className="space-y-6">
+                <h3 className={`text-sm uppercase tracking-widest font-bold flex items-center gap-3 ${colors.text}`}>
+                  <span className={`w-8 h-[2px] ${colors.bar}`}></span>
+                  {pos}
+                </h3>
+
+                <div className="space-y-8 pl-4 md:pl-8">
+                  {defs.map((def, idx) => (
+                    <div key={idx} className="group">
+                      <p className="text-white/90 text-lg leading-relaxed mb-3 flex items-start">
+                        <span className={`font-bold mr-3 mt-0.5 ${colors.text}`}>{idx + 1}.</span>
+                        <span>{def.definition}</span>
+                      </p>
+
+                      {def.examples.length > 0 && (
+                        <div className={`ml-6 pl-4 border-l-2 ${colors.border} space-y-2 mt-3`}>
+                          {def.examples.map((ex, i) => (
+                            <p key={i} className="text-white/50 text-base italic">
+                              "{ex}"
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* View more button */}
