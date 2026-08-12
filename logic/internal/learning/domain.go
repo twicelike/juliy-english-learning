@@ -36,11 +36,23 @@ const (
 	SessionExpired   SessionStatus = "expired"
 )
 
+type ReviewStrategy string
+
+const (
+	ReviewStrategyContinue ReviewStrategy = "continue_learning"
+	ReviewStrategyFresh    ReviewStrategy = "fresh"
+	ReviewStrategySmart    ReviewStrategy = "smart"
+)
+
 // LearningSession tracks a session of learning (e.g., a batch of 10 new words).
 type LearningSession struct {
 	ID           bson.ObjectID   `bson:"_id,omitempty"`
 	UserID       bson.ObjectID   `bson:"user_id"`
 	Mode         string          `bson:"mode"`
+	Source       string          `bson:"source"`
+	WordSetID    *bson.ObjectID  `bson:"word_set_id,omitempty"`
+	Strategy     *ReviewStrategy `bson:"strategy,omitempty"`
+	WordCount    int             `bson:"word_count,omitempty"`
 	WordIDs      []bson.ObjectID `bson:"word_ids"`       // Snapshot of words
 	CurrentIndex int             `bson:"current_index"` // Deprecated/Not heavily used in Phase L4
 	Status       SessionStatus   `bson:"status"`        // "preparing", "active", "completed", "expired"
@@ -224,6 +236,8 @@ type Repository interface {
 	UpdateSessionStatus(ctx context.Context, sessionID bson.ObjectID, status SessionStatus) error
 	GetPendingWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]bson.ObjectID, error)
 	SuspendWord(ctx context.Context, userID bson.ObjectID, wordID bson.ObjectID) error
+	GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]bson.ObjectID, error)
+	GetActiveWordSetSession(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) (*LearningSession, error)
 }
 
 type ExerciseContentRepository interface {
@@ -250,4 +264,5 @@ type Service interface {
 	SubmitSessionResults(ctx context.Context, userID string, sessionID string, req *SubmitSessionRequest) error
 	SuspendWord(ctx context.Context, userID string, wordID string) error
 	DebugAdvanceTime(ctx context.Context, userID string, days int) error
+	CreateWordSetReviewSession(ctx context.Context, userID string, setID string, strategy ReviewStrategy, wordCount int) (*SessionDTO, error)
 }

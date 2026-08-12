@@ -64,7 +64,11 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	userID := c.GetString(middleware.UserIDKey)
 
 	var req struct {
-		Mode string `json:"mode" binding:"required"`
+		Mode      string `json:"mode" binding:"required"`
+		Source    string `json:"source"`
+		WordSetID string `json:"word_set_id"`
+		Strategy  string `json:"strategy"`
+		WordCount int    `json:"word_count"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -82,7 +86,28 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	if req.Mode == "new_words" {
 		session, err = h.service.CreateNewWordsSession(c.Request.Context(), userID)
 	} else if req.Mode == "review" {
-		session, err = h.service.CreateReviewSession(c.Request.Context(), userID)
+		if req.Source == "word_set" {
+			if req.WordSetID == "" {
+				domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "word_set_id is required when source is word_set")
+				return
+			}
+			if req.Strategy == "" {
+				domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "strategy is required when source is word_set")
+				return
+			}
+			if req.WordCount < 5 || req.WordCount > 25 {
+				domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "word_count must be between 5 and 25")
+				return
+			}
+			strategy := ReviewStrategy(req.Strategy)
+			if strategy != ReviewStrategyContinue && strategy != ReviewStrategyFresh && strategy != ReviewStrategySmart {
+				domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid strategy")
+				return
+			}
+			session, err = h.service.CreateWordSetReviewSession(c.Request.Context(), userID, req.WordSetID, strategy, req.WordCount)
+		} else {
+			session, err = h.service.CreateReviewSession(c.Request.Context(), userID)
+		}
 	}
 
 	if err != nil {
@@ -92,6 +117,10 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 		if err.Error() == "no_due_words" {
 			domain.Fail(c, http.StatusNotFound, "NO_DUE_WORDS", "No words are due for review.")
+			return
+		}
+		if err.Error() == "no_reviewable_words" {
+			domain.Fail(c, http.StatusNotFound, "NO_REVIEWABLE_WORDS", "All words in this set are mastered.")
 			return
 		}
 		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())

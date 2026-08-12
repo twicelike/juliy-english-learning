@@ -10,7 +10,8 @@ type Phase = "initializing" | "preparing" | "flashcard" | "mcq" | "fill_blank" |
 function SessionRunner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const mode = searchParams.get("mode") as "new_words" | "review";
+  const mode = searchParams.get("mode") as "new_words" | "review" | null;
+  const sessionId = searchParams.get("session_id");
   const { user } = useAuthStore();
 
   const [session, setSession] = useState<SessionDTO | null>(null);
@@ -44,13 +45,17 @@ function SessionRunner() {
 
     const loadSession = async () => {
       try {
-        if (mode !== "new_words" && mode !== "review") {
-          setErrorMsg("Invalid session mode");
-          setPhase("error");
-          return;
+        let s: SessionDTO;
+        if (sessionId) {
+          s = await LearningAPI.getSessionById(sessionId);
+        } else {
+          if (mode !== "new_words" && mode !== "review") {
+            setErrorMsg("Invalid session mode");
+            setPhase("error");
+            return;
+          }
+          s = await LearningAPI.createSession(mode);
         }
-
-        const s = await LearningAPI.createSession(mode);
         if (s.items.length === 0) {
           setPhase("done");
           return;

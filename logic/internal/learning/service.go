@@ -340,6 +340,105 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 	return s.buildSessionDTO(ctx, session)
 }
 
+func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string, setID string, strategy ReviewStrategy, wordCount int) (*SessionDTO, error) {
+	uid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, err
+	}
+	sID, err := bson.ObjectIDFromHex(setID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Check for active session for this word set
+	active, err := s.repo.GetActiveWordSetSession(ctx, uid, sID)
+	if err != nil {
+		return nil, err
+	}
+	if active != nil {
+		return s.buildSessionDTO(ctx, active)
+	}
+
+	// 2. Fetch word IDs for this set (and verify ownership)
+	wordIDs, err := s.repo.GetWordIDsForWordSet(ctx, uid, sID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Get Learning Progress in batch
+	progressMap, err := s.repo.GetProgressForWords(ctx, uid, wordIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Classify words
+	var due, learning, newWords []bson.ObjectID
+	now := time.Now()
+	for _, wid := range wordIDs {
+		p, exists := progressMap[wid]
+		if !exists {
+			newWords = append(newWords, wid)
+		} else {
+			if p.Interval >= 21 { // Mastered
+				continue
+			}
+			if p.NextReviewDate.Before(now) || p.NextReviewDate.Equal(now) {
+				due = append(due, wid)
+			} else {
+				learning = append(learning, wid)
+			}
+		}
+	}
+
+	// 5. Select words
+	selectedIDs, err := SelectReviewWords(due, learning, newWords, strategy, wordCount)
+	if err != nil {
+		return nil, err
+	}
+
+	// 6. Create session
+	session := &LearningSession{
+		ID:           bson.NewObjectID(),
+		UserID:       uid,
+		Mode:         "review",
+		Source:       "word_set",
+		WordSetID:    &sID,
+		Strategy:     &strategy,
+		WordCount:    wordCount,
+		WordIDs:      selectedIDs,
+		CurrentIndex: 0,
+		Status:       SessionPreparing,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	err = s.repo.CreateSession(ctx, session)
+	if err != nil {
+		// If duplicate key error, we just return the active one or fail
+		if mongo.IsDuplicateKeyError(err) {
+			active, _ := s.repo.GetActiveWordSetSession(ctx, uid, sID)
+			if active != nil {
+				return s.buildSessionDTO(ctx, active)
+			}
+		}
+		return nil, err
+	}
+
+	// 7. Async trigger AI content preparation
+	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+		bgCtx := context.Background()
+		if s.exSvc != nil {
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+		}
+		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
+	}(session.ID, selectedIDs)
+
+	// 8. Build DTO
+	return s.buildSessionDTO(ctx, session)
+}
+
+
 func (s *service) GetSessionByID(ctx context.Context, sessionID string) (*SessionDTO, error) {
 	sid, err := bson.ObjectIDFromHex(sessionID)
 	if err != nil {

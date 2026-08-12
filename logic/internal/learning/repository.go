@@ -170,7 +170,25 @@ func (r *repository) GetActiveSession(ctx context.Context, userID bson.ObjectID,
 	err := r.sessionsColl.FindOne(ctx, bson.M{
 		"user_id": userID,
 		"mode":    mode,
-		"status":  "in_progress",
+		"status":  bson.M{"$in": []string{"preparing", "active"}},
+		"source":  bson.M{"$in": []interface{}{"", nil, "global"}},
+	}).Decode(&s)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *repository) GetActiveWordSetSession(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) (*LearningSession, error) {
+	var s LearningSession
+	err := r.sessionsColl.FindOne(ctx, bson.M{
+		"user_id":     userID,
+		"mode":        "review",
+		"status":      bson.M{"$in": []string{"preparing", "active"}},
+		"word_set_id": setID,
 	}).Decode(&s)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -449,4 +467,37 @@ func (r *repository) DebugAdvanceTime(ctx context.Context, userID bson.ObjectID,
 
 	_, err := r.progress.UpdateMany(ctx, filter, update)
 	return err
+}
+
+func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]bson.ObjectID, error) {
+	// First, check if the WordSet exists and belongs to the user
+	wordSetsColl := r.db.Collection("word_sets")
+	err := wordSetsColl.FindOne(ctx, bson.M{"_id": setID, "user_id": userID}).Err()
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("word set not found or you do not have permission")
+		}
+		return nil, err
+	}
+
+	// Then get all items
+	itemsColl := r.db.Collection("word_set_items")
+	opts := options.Find().SetSort(bson.D{{Key: "position", Value: 1}})
+	cursor, err := itemsColl.Find(ctx, bson.M{"word_set_id": setID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var ids []bson.ObjectID
+	for cursor.Next(ctx) {
+		var item struct {
+			WordID bson.ObjectID `bson:"word_id"`
+		}
+		if err := cursor.Decode(&item); err != nil {
+			return nil, err
+		}
+		ids = append(ids, item.WordID)
+	}
+	return ids, cursor.Err()
 }

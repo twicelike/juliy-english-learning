@@ -46,6 +46,14 @@ export interface WordResult {
   fill_blank_correct?: boolean;
 }
 
+export interface CreateSessionParams {
+  mode: "new_words" | "review";
+  source?: "word_set";
+  word_set_id?: string;
+  strategy?: "continue_learning" | "fresh_words" | "smart_mix";
+  word_count?: number;
+}
+
 export const LearningAPI = {
   getDashboard: async (): Promise<DashboardDTO> => {
     const res = await apiClient.get("/learning/dashboard");
@@ -59,8 +67,9 @@ export const LearningAPI = {
     return res.data.data;
   },
 
-  createSession: async (mode: "new_words" | "review"): Promise<SessionDTO> => {
-    const res = await apiClient.post("/learning/session", { mode });
+  createSession: async (params: CreateSessionParams | "new_words" | "review"): Promise<SessionDTO> => {
+    const payload = typeof params === "string" ? { mode: params } : params;
+    const res = await apiClient.post("/learning/session", payload);
     return res.data.data;
   },
 
