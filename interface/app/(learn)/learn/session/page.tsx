@@ -82,6 +82,9 @@ function SessionRunner() {
         } else if (errorCode === "NO_DUE_WORDS") {
           setDoneMsg({ title: "You're all caught up!", desc: "There are no words due for review right now." });
           setPhase("done");
+        } else if (errorCode === "NO_REVIEWABLE_WORDS") {
+          setDoneMsg({ title: "Word Set Completed!", desc: "All words in this set are currently mastered or you have selected a strategy that has no applicable words." });
+          setPhase("done");
         } else {
           console.error("Failed to load session:", e);
           setErrorMsg(e.message || "Failed to start session");

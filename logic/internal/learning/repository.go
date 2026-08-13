@@ -38,6 +38,9 @@ func (r *repository) GetProgress(ctx context.Context, userID, wordID bson.Object
 }
 
 func (r *repository) GetProgressForWords(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) (map[bson.ObjectID]*LearningProgress, error) {
+	if len(wordIDs) == 0 {
+		return make(map[bson.ObjectID]*LearningProgress), nil
+	}
 	filter := bson.M{"user_id": userID, "word_id": bson.M{"$in": wordIDs}}
 	cursor, err := r.progress.Find(ctx, filter)
 	if err != nil {
@@ -483,7 +486,7 @@ func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.Objec
 	// Then get all items
 	itemsColl := r.db.Collection("word_set_items")
 	opts := options.Find().SetSort(bson.D{{Key: "position", Value: 1}})
-	cursor, err := itemsColl.Find(ctx, bson.M{"word_set_id": setID}, opts)
+	cursor, err := itemsColl.Find(ctx, bson.M{"set_id": setID}, opts)
 	if err != nil {
 		return nil, err
 	}

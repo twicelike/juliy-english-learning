@@ -29,7 +29,13 @@ func SelectReviewWords(
 		return nil, ErrInvalidWordCount
 	}
 
-	totalAvailable := len(due) + len(learning) + len(newWords)
+	var totalAvailable int
+	if strategy == ReviewStrategyFresh {
+		totalAvailable = len(due) + len(newWords)
+	} else {
+		totalAvailable = len(due) + len(learning) + len(newWords)
+	}
+
 	if totalAvailable == 0 {
 		return nil, ErrNoReviewableWords
 	}

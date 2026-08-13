@@ -96,10 +96,14 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
                     <span className="text-indigo-400 font-bold mr-2">{i + 1}.</span>
                     {def.definition}
                   </p>
-                  {def.example && (
-                    <p className="text-white/50 text-base italic pl-6 border-l-2 border-white/10">
-                      "{def.example}"
-                    </p>
+                  {def.examples && def.examples.length > 0 && (
+                    <div className="space-y-1 mt-1">
+                      {def.examples.map((example, idx) => (
+                        <p key={idx} className="text-white/50 text-base italic pl-6 border-l-2 border-white/10">
+                          "{example}"
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}

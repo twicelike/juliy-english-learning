@@ -49,19 +49,19 @@ export function ReviewSetModal({ setId, isOpen, onClose }: ReviewSetModalProps) 
       id: "continue_learning",
       icon: <Play className="w-5 h-5" />,
       title: "Continue Learning",
-      desc: "Prioritize due words, then words you are learning, then new words.",
+      desc: "Review words due today, practice words you recently learned, and then learn new words.",
     },
     {
-      id: "fresh_words",
+      id: "fresh",
       icon: <Layers className="w-5 h-5" />,
       title: "Fresh Words",
-      desc: "Skip words you are currently learning. Prioritize due words, then new words.",
+      desc: "Only review words due today and new words. SKIPS words you recently learned.",
     },
     {
-      id: "smart_mix",
+      id: "smart",
       icon: <BrainCircuit className="w-5 h-5" />,
       title: "Smart Mix",
-      desc: "System automatically balances due, learning, and new words for optimal retention.",
+      desc: "Automatically mix due, learning, and new words for the best memory retention.",
     },
   ];
 

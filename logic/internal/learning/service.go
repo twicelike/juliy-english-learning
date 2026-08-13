@@ -364,6 +364,9 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	if err != nil {
 		return nil, err
 	}
+	if len(wordIDs) == 0 {
+		return nil, ErrNoReviewableWords
+	}
 
 	// 3. Get Learning Progress in batch
 	progressMap, err := s.repo.GetProgressForWords(ctx, uid, wordIDs)
@@ -646,19 +649,15 @@ func buildSessionItem(doc *dictionary.WordDocument) SessionItemDTO {
 		}
 	}
 
-	// Collect up to 3 definitions from senses
+	// Collect the primary definition (matches exercises)
 	var defs []string
 	var example string
 	for _, sense := range doc.Senses {
-		for _, gloss := range sense.Glosses {
-			if gloss != "" {
-				defs = append(defs, gloss)
+		if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
+			defs = append(defs, sense.Glosses[0])
+			if len(sense.Examples) > 0 {
+				example = sense.Examples[0].Text
 			}
-		}
-		if example == "" && len(sense.Examples) > 0 {
-			example = sense.Examples[0].Text
-		}
-		if len(defs) >= 3 {
 			break
 		}
 	}

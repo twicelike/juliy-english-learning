@@ -50,7 +50,7 @@ export interface CreateSessionParams {
   mode: "new_words" | "review";
   source?: "word_set";
   word_set_id?: string;
-  strategy?: "continue_learning" | "fresh_words" | "smart_mix";
+  strategy?: "continue_learning" | "fresh" | "smart";
   word_count?: number;
 }
 
