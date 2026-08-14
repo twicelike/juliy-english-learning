@@ -23,19 +23,26 @@ func NewRepository(db *mongo.Database) Repository {
 }
 
 func (r *repository) SearchPrefix(ctx context.Context, prefix string, limit int) ([]WordDocument, error) {
-	if limit > 20 {
-		limit = 20
+	if limit > 50 {
+		limit = 50
 	}
 	if limit <= 0 {
 		limit = 10
 	}
 
 	// Autocomplete via regex prefix search (anchored to start)
+	regex := bson.M{"$regex": "^" + prefix, "$options": "i"}
 	filter := bson.M{
-		"word": bson.M{"$regex": "^" + prefix, "$options": "i"},
+		"$or": []bson.M{
+			{"word": regex},
+			{"forms.form": regex},
+		},
 	}
 
-	opts := options.Find().SetLimit(int64(limit)).SetSort(bson.D{{Key: "word", Value: 1}})
+	opts := options.Find().
+		SetLimit(int64(limit)).
+		SetSort(bson.D{{Key: "word", Value: 1}}).
+		SetCollation(&options.Collation{Locale: "en", Strength: 2})
 	
 	// We only need the 'word' field for search suggestions, but the schema has more. 
 	// The plan mentions returning WordDTOs, so we'll fetch the whole doc or a projection.

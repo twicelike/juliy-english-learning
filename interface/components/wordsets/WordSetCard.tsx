@@ -1,18 +1,20 @@
 "use client";
 
-import { WordSet } from "@/lib/wordset-api";
+import { WordSetListItem } from "@/lib/wordset-api";
 import Link from "next/link";
 import { useState } from "react";
 
 interface Props {
-  set: WordSet;
-  onEdit: (set: WordSet) => void;
-  onDelete: (set: WordSet) => void;
+  set: WordSetListItem;
+  onEdit?: (set: WordSetListItem) => void;
+  onDelete?: (set: WordSetListItem) => void;
   formatRelativeTime: (date: string) => string;
+  mode?: "library" | "explore";
 }
 
-export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime }: Props) {
+export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = "library" }: Props) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   // Visual fill bar (word_count as relative fill, 50 is a visual reference only)
   const barFill = Math.min(Math.round((set.word_count / 50) * 100), 100);
@@ -50,48 +52,93 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime }: Props
             </div>
           </div>
 
-          {/* 3-dot menu */}
-          <div className="relative z-10 shrink-0">
+          {/* Eye Icon & 3-dot menu */}
+          <div className="relative z-10 shrink-0 flex items-center gap-1">
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={() => setShowDetails(true)}
               className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"
+              title="View full details"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 mt-2 w-36 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl z-20 py-1.5 overflow-hidden">
-                  <button
-                    onClick={() => { setShowMenu(false); onEdit(set); }}
-                    className="w-full text-left px-4 py-2 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Rename
-                  </button>
-                  <div className="mx-3 my-1 h-px bg-white/10" />
-                  <button
-                    onClick={() => { setShowMenu(false); onDelete(set); }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-400/5 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </>
+            {mode === "library" && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                  </svg>
+                </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-36 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl z-20 py-1.5 overflow-hidden">
+                      <button
+                        onClick={() => { setShowMenu(false); if (onEdit) onEdit(set); }}
+                        className="w-full text-left px-4 py-2 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        Edit Details
+                      </button>
+                      <div className="mx-3 my-1 h-px bg-white/10" />
+                      <button
+                        onClick={() => { setShowMenu(false); if (onDelete) onDelete(set); }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-400/5 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         {/* Description */}
         {set.description && (
-          <p className="text-white/40 text-sm leading-relaxed line-clamp-2">{set.description}</p>
+          <p className="text-white/40 text-sm leading-relaxed line-clamp-2 break-all">{set.description}</p>
+        )}
+
+        {/* Metadata for Explore Mode */}
+        {mode === "explore" && (
+          <div className="flex flex-col gap-2 mt-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+                set.difficulty === 'Beginner' ? 'bg-emerald-500/10 text-emerald-400' :
+                set.difficulty === 'Intermediate' ? 'bg-blue-500/10 text-blue-400' :
+                'bg-rose-500/10 text-rose-400'
+              }`}>
+                {set.difficulty || "Beginner"}
+              </span>
+              <span className="text-white/40 text-xs flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                {set.creator_name || "Unknown"}
+              </span>
+            </div>
+            {set.topics && set.topics.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {set.topics.map(t => (
+                  <span key={t} className="text-[10px] uppercase tracking-wider text-white/30 border border-white/10 px-1.5 py-0.5 rounded">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Word count + bar */}
-        <div className="space-y-2">
+        <div className="space-y-2 mt-auto pt-2">
           <div className="flex justify-between items-baseline">
             <span className="text-white font-semibold text-sm">{set.word_count} words</span>
+            {mode === "explore" && set.clone_count > 0 && (
+              <span className="text-indigo-300/80 text-xs font-medium">{set.clone_count} learners</span>
+            )}
           </div>
           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
             <div
@@ -105,24 +152,50 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime }: Props
         <p className="text-white/25 text-xs">Updated {formatRelativeTime(set.updated_at)}</p>
 
         {/* Actions */}
-        <div className="flex gap-2 mt-auto pt-1">
+        <div className="flex gap-2 pt-1">
           <Link
             href={`/word-sets/${set.id}`}
             className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold text-center transition-all shadow-sm shadow-indigo-500/20"
           >
-            Open Set
+            {mode === "explore" ? "View Set" : "Open Set"}
           </Link>
-          <Link
-            href={`/word-sets/${set.id}/builder`}
-            className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/60 hover:text-white text-sm font-medium text-center transition-all"
-            title="Open Builder"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </Link>
+          {mode === "library" && (
+            <Link
+              href={`/word-sets/${set.id}/builder`}
+              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/60 hover:text-white text-sm font-medium text-center transition-all"
+              title="Open Builder"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </Link>
+          )}
         </div>
       </div>
+
+      {/* Details Modal */}
+      {showDetails && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1e1e2d] border border-white/10 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowDetails(false)}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h2 className="text-2xl font-bold text-white mb-4 pr-8 leading-tight break-all">{set.name}</h2>
+            {set.description ? (
+              <div className="text-white/80 whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 text-base break-all">
+                {set.description}
+              </div>
+            ) : (
+              <p className="text-white/30 italic">No description provided.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

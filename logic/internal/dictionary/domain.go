@@ -63,6 +63,8 @@ type WordDTO struct {
 }
 
 type DefinitionDTO struct {
+	WordID       string   `json:"word_id,omitempty"`
+	SenseIndex   int      `json:"sense_index"`
 	PartOfSpeech string   `json:"partOfSpeech,omitempty"`
 	Definition   string   `json:"definition"`
 	Examples     []string `json:"examples"`

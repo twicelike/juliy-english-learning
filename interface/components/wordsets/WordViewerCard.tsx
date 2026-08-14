@@ -90,7 +90,10 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
             <div className="h-px bg-white/10 w-full" />
 
             <div className="space-y-6">
-              {word.definitions.slice(0, 3).map((def, i) => (
+              {word.definitions
+                .filter(def => (word as any).sense_index === undefined || def.sense_index === (word as any).sense_index)
+                .slice(0, 3)
+                .map((def, i) => (
                 <div key={i} className="space-y-2">
                   <p className="text-lg text-white/90 leading-relaxed">
                     <span className="text-indigo-400 font-bold mr-2">{i + 1}.</span>
@@ -98,9 +101,9 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
                   </p>
                   {def.examples && def.examples.length > 0 && (
                     <div className="space-y-1 mt-1">
-                      {def.examples.map((example, idx) => (
-                        <p key={idx} className="text-white/50 text-base italic pl-6 border-l-2 border-white/10">
-                          "{example}"
+                      {def.examples.slice(0, 2).map((ex, j) => (
+                        <p key={j} className="text-white/50 italic pl-5 border-l-2 border-indigo-500/30 py-0.5">
+                          &quot;{ex}&quot;
                         </p>
                       ))}
                     </div>

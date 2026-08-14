@@ -1,6 +1,8 @@
 import apiClient from "./api-client";
 
 export interface DefinitionDTO {
+  word_id?: string;
+  sense_index: number;
   partOfSpeech?: string;
   definition: string;
   examples: string[];
@@ -27,7 +29,7 @@ export const DictionaryAPI = {
   search: async (q: string): Promise<WordDTO[]> => {
     if (!q) return [];
     const res = await apiClient.get<ApiResponse<WordDTO[]>>(`/words/search?q=${encodeURIComponent(q)}`);
-    return res.data.data;
+    return res.data.data || [];
   },
   
   getDetail: async (word: string): Promise<WordDTO | null> => {

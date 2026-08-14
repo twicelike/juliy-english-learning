@@ -37,10 +37,16 @@ func (r *repository) GetProgress(ctx context.Context, userID, wordID bson.Object
 	return &p, nil
 }
 
-func (r *repository) GetProgressForWords(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) (map[bson.ObjectID]*LearningProgress, error) {
-	if len(wordIDs) == 0 {
-		return make(map[bson.ObjectID]*LearningProgress), nil
+func (r *repository) GetProgressForWords(ctx context.Context, userID bson.ObjectID, items []SessionItemRef) (map[LearningProgressKey]*LearningProgress, error) {
+	if len(items) == 0 {
+		return make(map[LearningProgressKey]*LearningProgress), nil
 	}
+	
+	wordIDs := make([]bson.ObjectID, len(items))
+	for i, item := range items {
+		wordIDs[i] = item.WordID
+	}
+
 	filter := bson.M{"user_id": userID, "word_id": bson.M{"$in": wordIDs}}
 	cursor, err := r.progress.Find(ctx, filter)
 	if err != nil {
@@ -48,13 +54,16 @@ func (r *repository) GetProgressForWords(ctx context.Context, userID bson.Object
 	}
 	defer cursor.Close(ctx)
 
-	result := make(map[bson.ObjectID]*LearningProgress, len(wordIDs))
+	result := make(map[LearningProgressKey]*LearningProgress, len(items))
 	for cursor.Next(ctx) {
 		var p LearningProgress
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		result[p.WordID] = &p
+		key := LearningProgressKey{WordID: p.WordID, SenseIndex: p.SenseIndex}
+		// Since multiple senses for same word_id might be returned, 
+		// we store them by the exact key.
+		result[key] = &p
 	}
 	return result, cursor.Err()
 }
@@ -68,7 +77,7 @@ func (r *repository) UpsertProgressAndLog(ctx context.Context, p *LearningProgre
 
 	callback := func(sessCtx context.Context) (interface{}, error) {
 		// 1. Upsert Progress
-		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID}
+		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_index": p.SenseIndex}
 		update := bson.M{
 			"$set": bson.M{
 				"interval":         p.Interval,
@@ -113,7 +122,7 @@ func (r *repository) UpsertProgressAndLog(ctx context.Context, p *LearningProgre
 	return nil
 }
 
-func (r *repository) GetDueWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]bson.ObjectID, error) {
+func (r *repository) GetDueWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]SessionItemRef, error) {
 	filter := bson.M{
 		"user_id":          userID,
 		"interval":         bson.M{"$gt": 0},
@@ -122,7 +131,7 @@ func (r *repository) GetDueWordIDs(ctx context.Context, userID bson.ObjectID, li
 	opts := options.Find().
 		SetLimit(int64(limit)).
 		SetSort(bson.D{{Key: "next_review_date", Value: 1}}).
-		SetProjection(bson.M{"word_id": 1})
+		SetProjection(bson.M{"word_id": 1, "sense_index": 1})
 
 	cursor, err := r.progress.Find(ctx, filter, opts)
 	if err != nil {
@@ -130,18 +139,18 @@ func (r *repository) GetDueWordIDs(ctx context.Context, userID bson.ObjectID, li
 	}
 	defer cursor.Close(ctx)
 
-	var ids []bson.ObjectID
+	var refs []SessionItemRef
 	for cursor.Next(ctx) {
 		var p LearningProgress
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		ids = append(ids, p.WordID)
+		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseIndex: p.SenseIndex})
 	}
-	return ids, cursor.Err()
+	return refs, cursor.Err()
 }
 
-func (r *repository) GetPendingWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]bson.ObjectID, error) {
+func (r *repository) GetPendingWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]SessionItemRef, error) {
 	filter := bson.M{
 		"user_id":  userID,
 		"interval": 0,
@@ -149,7 +158,7 @@ func (r *repository) GetPendingWordIDs(ctx context.Context, userID bson.ObjectID
 	opts := options.Find().
 		SetLimit(int64(limit)).
 		SetSort(bson.D{{Key: "created_at", Value: 1}}).
-		SetProjection(bson.M{"word_id": 1})
+		SetProjection(bson.M{"word_id": 1, "sense_index": 1})
 
 	cursor, err := r.progress.Find(ctx, filter, opts)
 	if err != nil {
@@ -157,15 +166,15 @@ func (r *repository) GetPendingWordIDs(ctx context.Context, userID bson.ObjectID
 	}
 	defer cursor.Close(ctx)
 
-	var ids []bson.ObjectID
+	var refs []SessionItemRef
 	for cursor.Next(ctx) {
 		var p LearningProgress
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		ids = append(ids, p.WordID)
+		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseIndex: p.SenseIndex})
 	}
-	return ids, cursor.Err()
+	return refs, cursor.Err()
 }
 
 func (r *repository) GetActiveSession(ctx context.Context, userID bson.ObjectID, mode string) (*LearningSession, error) {
@@ -229,8 +238,24 @@ func (r *repository) SubmitSessionWithTransaction(ctx context.Context, sessionID
 
 	// 2. Update all progresses
 	for _, p := range progresses {
-		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID}
-		update := bson.M{"$set": p}
+		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_index": p.SenseIndex}
+		update := bson.M{
+			"$set": bson.M{
+				"interval":         p.Interval,
+				"repetition":       p.Repetition,
+				"ease_factor":      p.EaseFactor,
+				"next_review_date": p.NextReviewDate,
+				"last_review_date": p.LastReviewDate,
+				"updated_at":       p.UpdatedAt,
+			},
+			"$setOnInsert": bson.M{
+				"_id":         p.ID,
+				"user_id":     p.UserID,
+				"word_id":     p.WordID,
+				"sense_index": p.SenseIndex,
+				"created_at":  p.CreatedAt,
+			},
+		}
 		opts := options.UpdateOne().SetUpsert(true)
 		if _, err := r.progress.UpdateOne(ctx, filter, update, opts); err != nil {
 			return err
@@ -391,6 +416,9 @@ func (r *repository) GetDashboardCounts(ctx context.Context, userID bson.ObjectI
 }
 
 func (r *repository) EnsureIndexes(ctx context.Context) error {
+	// Drop legacy index if it exists
+	_ = r.progress.Indexes().DropOne(ctx, "user_id_1_word_id_1")
+
 	// 1. learning_progress: {user_id: 1, next_review_date: 1}
 	_, err := r.progress.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
@@ -402,11 +430,12 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 		return err
 	}
 
-	// 2. learning_progress: {user_id: 1, word_id: 1} UNIQUE
+	// 2. learning_progress: {user_id: 1, word_id: 1, sense_index: 1} UNIQUE
 	_, err = r.progress.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "user_id", Value: 1},
 			{Key: "word_id", Value: 1},
+			{Key: "sense_index", Value: 1},
 		},
 		Options: options.Index().SetUnique(true),
 	})
@@ -425,11 +454,12 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 		return err
 	}
 
-	// 4. reviews: {user_id: 1, word_id: 1}
+	// 4. reviews: {user_id: 1, word_id: 1, sense_index: 1}
 	_, err = r.reviewsColl.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "user_id", Value: 1},
 			{Key: "word_id", Value: 1},
+			{Key: "sense_index", Value: 1},
 		},
 	})
 	if err != nil {
@@ -472,7 +502,7 @@ func (r *repository) DebugAdvanceTime(ctx context.Context, userID bson.ObjectID,
 	return err
 }
 
-func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]bson.ObjectID, error) {
+func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]SessionItemRef, error) {
 	// First, check if the WordSet exists and belongs to the user
 	wordSetsColl := r.db.Collection("word_sets")
 	err := wordSetsColl.FindOne(ctx, bson.M{"_id": setID, "user_id": userID}).Err()
@@ -492,15 +522,16 @@ func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.Objec
 	}
 	defer cursor.Close(ctx)
 
-	var ids []bson.ObjectID
+	var refs []SessionItemRef
 	for cursor.Next(ctx) {
 		var item struct {
-			WordID bson.ObjectID `bson:"word_id"`
+			WordID     bson.ObjectID `bson:"word_id"`
+			SenseIndex int           `bson:"sense_index"`
 		}
 		if err := cursor.Decode(&item); err != nil {
 			return nil, err
 		}
-		ids = append(ids, item.WordID)
+		refs = append(refs, SessionItemRef{WordID: item.WordID, SenseIndex: item.SenseIndex})
 	}
-	return ids, cursor.Err()
+	return refs, cursor.Err()
 }

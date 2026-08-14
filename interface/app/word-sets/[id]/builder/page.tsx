@@ -17,7 +17,8 @@ export default function WordSetBuilderPage() {
   const [searchResults, setSearchResults] = useState<WordDTO[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
+  const [selectedItems, setSelectedItems] = useState<Map<string, {word_id: string, sense_index: number}>>(new Map());
+  const [existingItems, setExistingItems] = useState<Set<string>>(new Set());
   
   const [isSaving, setIsSaving] = useState(false);
 
@@ -30,6 +31,13 @@ export default function WordSetBuilderPage() {
       setLoading(true);
       const res = await WordSetAPI.getWordSet(id);
       setSet(res);
+      const existing = new Set<string>();
+      if (res.saved_senses) {
+        res.saved_senses.forEach((s) => {
+          existing.add(`${s.word_id}:${s.sense_index}`);
+        });
+      }
+      setExistingItems(existing);
     } catch (err) {
       console.error(err);
       router.push("/word-sets");
@@ -38,42 +46,59 @@ export default function WordSetBuilderPage() {
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    try {
-      setIsSearching(true);
-      const results = await DictionaryAPI.search(query);
-      setSearchResults(results);
-    } catch (err) {
-      console.error(err);
-    } finally {
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length === 0) {
+      setSearchResults([]);
       setIsSearching(false);
+      return;
     }
+    if (q.length < 2) {
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const results = await DictionaryAPI.search(q);
+        setSearchResults(results);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [query]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
   };
 
-  const toggleWord = (wordId: string) => {
-    setSelectedWordIds(prev => {
-      const next = new Set(prev);
-      if (next.has(wordId)) {
-        next.delete(wordId);
+  const toggleItem = (wordId: string, senseIndex: number) => {
+    setSelectedItems(prev => {
+      const next = new Map(prev);
+      const key = `${wordId}:${senseIndex}`;
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(wordId);
+        next.set(key, { word_id: wordId, sense_index: senseIndex });
       }
       return next;
     });
   };
 
   const handleSave = async () => {
-    if (selectedWordIds.size === 0) return;
+    if (selectedItems.size === 0) return;
     if (!set) return;
 
     setIsSaving(true);
     try {
-      const res = await WordSetAPI.bulkAddWords(set.id, Array.from(selectedWordIds));
+      const items = Array.from(selectedItems.values());
+      const res = await WordSetAPI.bulkAddWords(set.id, items);
       alert(`Added ${res.added} words! Word set now has ${res.word_count}/${res.limit} words.`);
-      setSelectedWordIds(new Set()); // clear selection
+      setSelectedItems(new Map()); // clear selection
       loadSet(); // reload count
     } catch (err: any) {
       alert(err.response?.data?.error || "Failed to add words");
@@ -130,23 +155,54 @@ export default function WordSetBuilderPage() {
             </div>
           ) : (
             searchResults.map(word => {
-              const isSelected = selectedWordIds.has(word.id);
               return (
-                <div key={word.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isSelected ? "bg-indigo-500/10 border-indigo-500/50" : "bg-white/5 border-white/5 hover:bg-white/10"}`}>
-                  <div>
-                    <div className="text-white font-medium text-lg">{word.word}</div>
-                    <div className="text-white/40 text-sm mt-1">{word.pos} • {word.definitions?.[0]?.definition}</div>
+                <div key={word.id} className="bg-white/5 border border-white/5 rounded-xl overflow-hidden">
+                  <div className="p-4 bg-black/20 border-b border-white/5 flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-medium text-lg">{word.word}</div>
+                      <div className="text-white/40 text-sm mt-1">{word.pos} • {word.ipa}</div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => toggleWord(word.id)}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isSelected ? "bg-indigo-500 text-white" : "bg-black/40 text-white/50 hover:bg-white/10"}`}
-                  >
-                    {isSelected ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                    )}
-                  </button>
+                  <div className="p-2 space-y-1">
+                    {word.definitions
+                      ?.filter((def, idx, arr) => arr.findIndex(d => d.sense_index === def.sense_index && (d.word_id || word.id) === (def.word_id || word.id)) === idx)
+                      .map((def) => {
+                      const key = `${def.word_id || word.id}:${def.sense_index}`;
+                      const isSelected = selectedItems.has(key);
+                      const isExisting = existingItems.has(key);
+                      return (
+                        <div 
+                          key={key}
+                          onClick={() => {
+                            if (!isExisting) toggleItem(def.word_id || word.id, def.sense_index);
+                          }}
+                          className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
+                            isExisting ? "opacity-50 cursor-not-allowed" :
+                            isSelected ? "bg-indigo-500/20 cursor-pointer" : "hover:bg-white/5 cursor-pointer"
+                          }`}
+                        >
+                          <div className={`mt-0.5 w-5 h-5 rounded flex-shrink-0 border flex items-center justify-center transition-colors ${
+                            isExisting ? "border-white/20 bg-white/10" :
+                            isSelected ? "bg-indigo-500 border-indigo-500" : "border-white/30"
+                          }`}>
+                            {(isSelected || isExisting) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              {(def.partOfSpeech || word.pos) && <span className="text-[10px] uppercase font-bold text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded">{def.partOfSpeech || word.pos}</span>}
+                              {isExisting && <span className="text-[10px] uppercase font-bold text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded">Already in set</span>}
+                            </div>
+                            <div className={`text-sm ${isSelected ? "text-indigo-100" : "text-white/70"}`}>
+                              {def.definition}
+                            </div>
+                            {def.examples?.[0] && (
+                              <div className="text-xs text-white/30 mt-1 italic">&quot;{def.examples[0]}&quot;</div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               );
             })
@@ -156,13 +212,13 @@ export default function WordSetBuilderPage() {
         {/* Floating Action Bar */}
         <div className="mt-8 flex items-center justify-between bg-black/40 p-4 rounded-2xl border border-white/10">
           <div className="text-white/70">
-            Selected: <span className="text-white font-bold">{selectedWordIds.size}</span> words
+            Selected: <span className="text-white font-bold">{selectedItems.size}</span> words
           </div>
           <button
             onClick={handleSave}
-            disabled={selectedWordIds.size === 0 || isSaving}
+            disabled={selectedItems.size === 0 || isSaving}
             className={`px-8 py-3 rounded-xl font-medium transition-all ${
-              selectedWordIds.size > 0 && !isSaving
+              selectedItems.size > 0 && !isSaving
                 ? "bg-indigo-500 text-white hover:bg-indigo-600 shadow-lg shadow-indigo-500/30" 
                 : "bg-white/5 text-white/30 cursor-not-allowed"
             }`}

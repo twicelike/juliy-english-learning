@@ -1,6 +1,7 @@
 package wordset
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,25 @@ type Handler struct {
 
 func NewHandler(svc Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+func (h *Handler) GetTopics(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"topics": PredefinedTopics})
+}
+
+func (h *Handler) Explore(c *gin.Context) {
+	var req ExploreWordSetsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := h.svc.ExploreWordSets(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 func (h *Handler) getUserID(c *gin.Context) (bson.ObjectID, bool) {
@@ -65,15 +85,15 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	var containsWordID *bson.ObjectID
-	if cw := c.Query("contains_word"); cw != "" {
-		id, err := bson.ObjectIDFromHex(cw)
-		if err == nil {
-			containsWordID = &id
+	// Parse multiple contains_word IDs (e.g., ?contains_word=id1&contains_word=id2)
+	var containsWordIDs []bson.ObjectID
+	for _, cw := range c.QueryArray("contains_word") {
+		if id, err := bson.ObjectIDFromHex(cw); err == nil {
+			containsWordIDs = append(containsWordIDs, id)
 		}
 	}
 
-	res, err := h.svc.GetWordSetsByUserID(c.Request.Context(), uid, containsWordID)
+	res, err := h.svc.GetWordSetsByUserID(c.Request.Context(), uid, containsWordIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -182,7 +202,7 @@ func (h *Handler) AddWord(c *gin.Context) {
 		return
 	}
 
-	err = h.svc.AddWord(c.Request.Context(), uid, setID, wordID)
+	err = h.svc.AddWord(c.Request.Context(), uid, setID, wordID, req.SenseIndex)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -211,6 +231,9 @@ func (h *Handler) BulkAddWords(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Debug: log what was actually received and inserted
+	c.Header("X-Debug-Received", fmt.Sprintf("%d", len(req.Items)))
+	c.Header("X-Debug-Added", fmt.Sprintf("%d", res.Added))
 	c.JSON(http.StatusOK, res)
 }
 
@@ -261,3 +284,88 @@ func (h *Handler) ReorderWords(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
+
+func (h *Handler) Clone(c *gin.Context) {
+	uid, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	setID, ok := h.getSetID(c)
+	if !ok {
+		return
+	}
+
+	set, err := h.svc.CloneWordSet(c.Request.Context(), uid, setID)
+	if err != nil {
+		if err.Error() == "wordset not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else if err.Error() == "you already own this word set" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": set})
+}
+
+func (h *Handler) BatchDeleteWords(c *gin.Context) {
+	uid, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	setID, ok := h.getSetID(c)
+	if !ok {
+		return
+	}
+
+	var req BatchDeleteWordsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := h.svc.BatchDeleteWords(c.Request.Context(), uid, setID, req)
+	if err != nil {
+		if err.Error() == "wordset not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else if err.Error() == fmt.Sprintf("unauthorized: you don't own this wordset") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+func (h *Handler) RestoreWords(c *gin.Context) {
+	uid, ok := h.getUserID(c)
+	if !ok {
+		return
+	}
+	setID, ok := h.getSetID(c)
+	if !ok {
+		return
+	}
+
+	var req RestoreWordsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := h.svc.RestoreWords(c.Request.Context(), uid, setID, req)
+	if err != nil {
+		if err.Error() == "wordset not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else if err.Error() == fmt.Sprintf("unauthorized: you don't own this wordset") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+

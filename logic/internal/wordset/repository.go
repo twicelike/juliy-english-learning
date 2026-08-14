@@ -60,6 +60,66 @@ func (r *repository) UpdateWordSet(ctx context.Context, id bson.ObjectID, update
 	return nil
 }
 
+func (r *repository) ExploreWordSets(ctx context.Context, req ExploreWordSetsRequest) ([]WordSet, int, error) {
+	filter := bson.M{"visibility": WordSetVisibilityPublic}
+
+	if req.Query != "" {
+		filter["$or"] = []bson.M{
+			{"name": bson.M{"$regex": req.Query, "$options": "i"}},
+			{"description": bson.M{"$regex": req.Query, "$options": "i"}},
+		}
+	}
+	if req.Topic != "" {
+		filter["topics"] = req.Topic
+	}
+	if req.Difficulty != "" {
+		if req.Difficulty == string(DifficultyBeginner) {
+			filter["difficulty"] = bson.M{"$in": []interface{}{req.Difficulty, "", nil}}
+		} else {
+			filter["difficulty"] = req.Difficulty
+		}
+	}
+
+	totalCount, err := r.db.Collection("word_sets").CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("wordset.ExploreWordSets count: %w", err)
+	}
+
+	sortDoc := bson.D{{Key: "clone_count", Value: -1}}
+	if req.Sort == "newest" {
+		sortDoc = bson.D{{Key: "created_at", Value: -1}}
+	}
+
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := req.Limit
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	skip := int64((page - 1) * limit)
+
+	opts := options.Find().SetSort(sortDoc).SetSkip(skip).SetLimit(int64(limit))
+
+	cursor, err := r.db.Collection("word_sets").Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, fmt.Errorf("wordset.ExploreWordSets find: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var sets []WordSet
+	if err := cursor.All(ctx, &sets); err != nil {
+		return nil, 0, fmt.Errorf("wordset.ExploreWordSets decode: %w", err)
+	}
+
+	if sets == nil {
+		sets = []WordSet{}
+	}
+
+	return sets, int(totalCount), nil
+}
+
 func (r *repository) DeleteWordSetWithItems(ctx context.Context, id bson.ObjectID) error {
 	// Simple two-step deletion. In a replica set, this could be a multi-document transaction.
 	_, err := r.db.Collection("word_set_items").DeleteMany(ctx, bson.M{"set_id": id})
@@ -99,14 +159,38 @@ func (r *repository) GetWordSetItems(ctx context.Context, setID bson.ObjectID) (
 }
 
 func (r *repository) RemoveWordSetItem(ctx context.Context, setID, wordID bson.ObjectID) error {
-	res, err := r.db.Collection("word_set_items").DeleteOne(ctx, bson.M{"set_id": setID, "word_id": wordID})
+	res, err := r.db.Collection("word_set_items").DeleteMany(ctx, bson.M{"set_id": setID, "word_id": wordID})
 	if err != nil {
 		return fmt.Errorf("wordset.RemoveWordSetItem: %w", err)
 	}
 	if res.DeletedCount > 0 {
-		_, _ = r.db.Collection("word_sets").UpdateOne(ctx, bson.M{"_id": setID}, bson.M{"$inc": bson.M{"word_count": -1}})
+		_, _ = r.db.Collection("word_sets").UpdateOne(ctx, bson.M{"_id": setID}, bson.M{"$inc": bson.M{"word_count": -res.DeletedCount}})
 	}
 	return nil
+}
+
+// BatchRemoveWordSetItems deletes multiple word items in a single operation and decrements word_count atomically.
+func (r *repository) BatchRemoveWordSetItems(ctx context.Context, setID bson.ObjectID, wordIDs []bson.ObjectID) (int64, error) {
+	if len(wordIDs) == 0 {
+		return 0, nil
+	}
+	filter := bson.M{
+		"set_id":  setID,
+		"word_id": bson.M{"$in": wordIDs},
+	}
+	res, err := r.db.Collection("word_set_items").DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, fmt.Errorf("wordset.BatchRemoveWordSetItems: %w", err)
+	}
+	if res.DeletedCount > 0 {
+		// Clamp: never let word_count go below 0
+		_, _ = r.db.Collection("word_sets").UpdateOne(
+			ctx,
+			bson.M{"_id": setID},
+			bson.M{"$inc": bson.M{"word_count": -res.DeletedCount}},
+		)
+	}
+	return res.DeletedCount, nil
 }
 
 func (r *repository) ReorderWordSetItems(ctx context.Context, setID bson.ObjectID, wordIDs []bson.ObjectID) error {
@@ -166,7 +250,10 @@ func (r *repository) CreateWordSetItems(ctx context.Context, items []WordSetItem
 	return insertedCount, err
 }
 
-func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID, wordID bson.ObjectID) ([]bson.ObjectID, error) {
+func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) ([]WordSetItem, error) {
+	if len(wordIDs) == 0 {
+		return []WordSetItem{}, nil
+	}
 	cursor, err := r.db.Collection("word_sets").Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
 		return nil, err
@@ -179,7 +266,7 @@ func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID, word
 	}
 	
 	if len(userSets) == 0 {
-		return []bson.ObjectID{}, nil
+		return []WordSetItem{}, nil
 	}
 	
 	var setIDs []bson.ObjectID
@@ -189,7 +276,7 @@ func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID, word
 	
 	filter := bson.M{
 		"set_id": bson.M{"$in": setIDs},
-		"word_id": wordID,
+		"word_id": bson.M{"$in": wordIDs},
 	}
 	
 	itemCursor, err := r.db.Collection("word_set_items").Find(ctx, filter)
@@ -203,12 +290,7 @@ func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID, word
 		return nil, err
 	}
 	
-	var res []bson.ObjectID
-	for _, it := range items {
-		res = append(res, it.SetID)
-	}
-	
-	return res, nil
+	return items, nil
 }
 
 func (r *repository) VerifyWordsExist(ctx context.Context, wordIDs []bson.ObjectID) (int, error) {
@@ -237,7 +319,7 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 	// word_set_items indexes
 	wsiIndex := []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "set_id", Value: 1}, {Key: "word_id", Value: 1}},
+			Keys:    bson.D{{Key: "set_id", Value: 1}, {Key: "word_id", Value: 1}, {Key: "sense_index", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
 		{

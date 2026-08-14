@@ -18,6 +18,7 @@ type LearningProgress struct {
 	ID             bson.ObjectID `bson:"_id,omitempty"`
 	UserID         bson.ObjectID `bson:"user_id"`
 	WordID         bson.ObjectID `bson:"word_id"`
+	SenseIndex     int           `bson:"sense_index"`
 	Interval       int           `bson:"interval"`         // Interval in days
 	Repetition     int           `bson:"repetition"`       // Consecutive correct reviews
 	EaseFactor     float64       `bson:"ease_factor"`      // SM-2 Ease Factor (default 2.5)
@@ -25,6 +26,12 @@ type LearningProgress struct {
 	LastReviewDate time.Time     `bson:"last_review_date"` // New field
 	CreatedAt      time.Time     `bson:"created_at"`
 	UpdatedAt      time.Time     `bson:"updated_at"`
+}
+
+// LearningProgressKey uniquely identifies a progress record.
+type LearningProgressKey struct {
+	WordID     bson.ObjectID
+	SenseIndex int
 }
 
 type SessionStatus string
@@ -44,18 +51,24 @@ const (
 	ReviewStrategySmart    ReviewStrategy = "smart"
 )
 
+// SessionItemRef pairs a WordID with the specific SenseIndex the user is learning.
+type SessionItemRef struct {
+	WordID     bson.ObjectID `bson:"word_id"`
+	SenseIndex int           `bson:"sense_index"`
+}
+
 // LearningSession tracks a session of learning (e.g., a batch of 10 new words).
 type LearningSession struct {
-	ID           bson.ObjectID   `bson:"_id,omitempty"`
-	UserID       bson.ObjectID   `bson:"user_id"`
-	Mode         string          `bson:"mode"`
-	Source       string          `bson:"source"`
-	WordSetID    *bson.ObjectID  `bson:"word_set_id,omitempty"`
-	Strategy     *ReviewStrategy `bson:"strategy,omitempty"`
-	WordCount    int             `bson:"word_count,omitempty"`
-	WordIDs      []bson.ObjectID `bson:"word_ids"`       // Snapshot of words
-	CurrentIndex int             `bson:"current_index"` // Deprecated/Not heavily used in Phase L4
-	Status       SessionStatus   `bson:"status"`        // "preparing", "active", "completed", "expired"
+	ID           bson.ObjectID    `bson:"_id,omitempty"`
+	UserID       bson.ObjectID    `bson:"user_id"`
+	Mode         string           `bson:"mode"`
+	Source       string           `bson:"source"`
+	WordSetID    *bson.ObjectID   `bson:"word_set_id,omitempty"`
+	Strategy     *ReviewStrategy  `bson:"strategy,omitempty"`
+	WordCount    int              `bson:"word_count,omitempty"`
+	Items        []SessionItemRef `bson:"items"` // Changed from WordIDs to track sense
+	CurrentIndex int              `bson:"current_index"` // Deprecated/Not heavily used in Phase L4
+	Status       SessionStatus    `bson:"status"`        // "preparing", "active", "completed", "expired"
 	CreatedAt    time.Time       `bson:"created_at"`
 	UpdatedAt    time.Time       `bson:"updated_at"`
 }
@@ -106,6 +119,7 @@ type Review struct {
 	ID             bson.ObjectID `bson:"_id,omitempty"`
 	UserID         bson.ObjectID `bson:"user_id"`
 	WordID         bson.ObjectID `bson:"word_id"`
+	SenseIndex     int           `bson:"sense_index"`
 	Quality        Quality       `bson:"quality"`
 	ResponseTimeMs int           `bson:"response_time_ms,omitempty"`
 	OldInterval    int           `bson:"old_interval"`
@@ -176,6 +190,7 @@ type ChoiceDTO struct {
 // For flashcard mode, Choices is nil. For quiz mode, Choices is populated.
 type SessionItemDTO struct {
 	WordID            string      `json:"word_id"`
+	SenseIndex        int         `json:"sense_index"`
 	Word              string      `json:"word"`
 	POS               string      `json:"pos"`
 	IPA               string      `json:"ipa"`
@@ -198,6 +213,7 @@ type SessionDTO struct {
 // WordResult represents the user's performance on a single word across the session phases.
 type WordResult struct {
 	WordID                string `json:"word_id" binding:"required"`
+	SenseIndex            int    `json:"sense_index"`
 	FlashcardQuality      int    `json:"flashcard_quality" binding:"required,min=1,max=5"`
 	MultipleChoiceCorrect *bool  `json:"multiple_choice_correct,omitempty"`
 	FillBlankCorrect      *bool  `json:"fill_blank_correct,omitempty"`
@@ -222,10 +238,10 @@ type LearningAssessment struct {
 
 type Repository interface {
 	GetProgress(ctx context.Context, userID, wordID bson.ObjectID) (*LearningProgress, error)
-	GetProgressForWords(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) (map[bson.ObjectID]*LearningProgress, error)
+	GetProgressForWords(ctx context.Context, userID bson.ObjectID, items []SessionItemRef) (map[LearningProgressKey]*LearningProgress, error)
 	// UpsertProgressAndLog uses a MongoDB transaction to update progress and insert a review atomically.
 	UpsertProgressAndLog(ctx context.Context, p *LearningProgress, r *Review) error
-	GetDueWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]bson.ObjectID, error)
+	GetDueWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]SessionItemRef, error)
 	GetDashboardCounts(ctx context.Context, userID bson.ObjectID, bookmarkedWordIDs []bson.ObjectID) (*DashboardDTO, error)
 	EnsureIndexes(ctx context.Context) error
 	DebugAdvanceTime(ctx context.Context, userID bson.ObjectID, days int) error
@@ -234,9 +250,9 @@ type Repository interface {
 	CreateSession(ctx context.Context, session *LearningSession) error
 	SubmitSessionWithTransaction(ctx context.Context, sessionID bson.ObjectID, progresses []*LearningProgress, reviews []*Review, totalXP int) error
 	UpdateSessionStatus(ctx context.Context, sessionID bson.ObjectID, status SessionStatus) error
-	GetPendingWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]bson.ObjectID, error)
+	GetPendingWordIDs(ctx context.Context, userID bson.ObjectID, limit int) ([]SessionItemRef, error)
 	SuspendWord(ctx context.Context, userID bson.ObjectID, wordID bson.ObjectID) error
-	GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]bson.ObjectID, error)
+	GetWordIDsForWordSet(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) ([]SessionItemRef, error)
 	GetActiveWordSetSession(ctx context.Context, userID bson.ObjectID, setID bson.ObjectID) (*LearningSession, error)
 }
 

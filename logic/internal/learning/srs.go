@@ -18,6 +18,7 @@ func (s *SM2Scheduler) CalculateNext(p *LearningProgress, q Quality) *LearningPr
 		ID:             p.ID,
 		UserID:         p.UserID,
 		WordID:         p.WordID,
+		SenseIndex:     p.SenseIndex,
 		CreatedAt:      p.CreatedAt,
 		LastReviewDate: time.Now(),
 	}
@@ -44,11 +45,12 @@ func (s *SM2Scheduler) CalculateNext(p *LearningProgress, q Quality) *LearningPr
 		// Passed
 		next.Repetition = p.Repetition + 1
 		
-		if next.Repetition == 1 {
+		switch next.Repetition {
+		case 1:
 			next.Interval = 1
-		} else if next.Repetition == 2 {
+		case 2:
 			next.Interval = 6
-		} else {
+		default:
 			// I(n) = I(n-1) * EF
 			next.Interval = int(math.Round(float64(p.Interval) * ef))
 		}

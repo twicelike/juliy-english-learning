@@ -107,7 +107,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
 		_ = learnRepo.EnsureIndexes(ctx)
 
-		wordSetService := wordset.NewService(wordSetRepo, dictService, learnRepo)
+		wordSetService := wordset.NewService(wordSetRepo, authRepo, dictService, learnRepo)
 		wordSetHandler := wordset.NewHandler(wordSetService)
 
 		wordSetRoutes := v1.Group("/word-sets")
@@ -115,13 +115,18 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		{
 			wordSetRoutes.POST("", wordSetHandler.Create)
 			wordSetRoutes.GET("", wordSetHandler.List)
+			wordSetRoutes.GET("/explore", wordSetHandler.Explore)
+			wordSetRoutes.GET("/topics", wordSetHandler.GetTopics)
 			wordSetRoutes.GET("/:id", wordSetHandler.Get)
 			wordSetRoutes.PATCH("/:id", wordSetHandler.Update)
 			wordSetRoutes.DELETE("/:id", wordSetHandler.Delete)
+			wordSetRoutes.POST("/:id/clone", wordSetHandler.Clone)
 			
 			wordSetRoutes.GET("/:id/words", wordSetHandler.GetWords)
 			wordSetRoutes.POST("/:id/words", wordSetHandler.AddWord)
 			wordSetRoutes.POST("/:id/words/bulk", wordSetHandler.BulkAddWords)
+			wordSetRoutes.POST("/:id/words/restore", wordSetHandler.RestoreWords)
+			wordSetRoutes.DELETE("/:id/words", wordSetHandler.BatchDeleteWords)
 			wordSetRoutes.DELETE("/:id/words/:wordId", wordSetHandler.RemoveWord)
 			wordSetRoutes.PATCH("/:id/words/reorder", wordSetHandler.ReorderWords)
 		}

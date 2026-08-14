@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { UpdateWordSetRequest, WordSet, WordSetVisibility } from "@/lib/wordset-api";
+import { useEffect, useState } from "react";
+import { UpdateWordSetRequest, WordSet, WordSetVisibility, WordSetDifficulty, WordSetAPI } from "@/lib/wordset-api";
 
 interface Props {
   set: WordSet;
@@ -11,6 +11,14 @@ interface Props {
 export function EditWordSetModal({ set, onClose, onSubmit, isSubmitting }: Props) {
   const [name, setName] = useState(set.name);
   const [description, setDescription] = useState(set.description || "");
+  const [visibility, setVisibility] = useState<WordSetVisibility>(set.visibility);
+  const [difficulty, setDifficulty] = useState<WordSetDifficulty>(set.difficulty || "Beginner");
+  const [selectedTopics, setSelectedTopics] = useState<string[]>(set.topics || []);
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+
+  useEffect(() => {
+    WordSetAPI.getTopics().then(setAvailableTopics).catch(console.error);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,8 +27,28 @@ export function EditWordSetModal({ set, onClose, onSubmit, isSubmitting }: Props
     const updates: UpdateWordSetRequest = {};
     if (name !== set.name) updates.name = name;
     if (description !== set.description) updates.description = description;
+    if (visibility !== set.visibility) updates.visibility = visibility;
+    if (difficulty !== set.difficulty) updates.difficulty = difficulty;
     
-    onSubmit(updates);
+    // Check if topics changed
+    const topicsChanged = 
+      selectedTopics.length !== (set.topics?.length || 0) || 
+      !selectedTopics.every(t => set.topics?.includes(t));
+      
+    if (topicsChanged) updates.topics = selectedTopics;
+    
+    // Only submit if there are actual changes
+    if (Object.keys(updates).length > 0) {
+      onSubmit(updates);
+    } else {
+      onClose(); // No changes, just close
+    }
+  };
+
+  const toggleTopic = (topic: string) => {
+    setSelectedTopics(prev => 
+      prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+    );
   };
 
   return (
@@ -54,6 +82,54 @@ export function EditWordSetModal({ set, onClose, onSubmit, isSubmitting }: Props
               className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors min-h-[100px]"
               maxLength={500}
             />
+          </div>
+          <div>
+            <label className="block text-sm text-white/70 mb-1">Visibility</label>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as WordSetVisibility)}
+              className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+            >
+              <option value="private">Private (Only you)</option>
+              <option value="public">Public (Everyone)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-white/70 mb-2">Difficulty</label>
+            <div className="flex gap-4">
+              {["Beginner", "Intermediate", "Advanced"].map((level) => (
+                <label key={level} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="difficulty"
+                    value={level}
+                    checked={difficulty === level}
+                    onChange={(e) => setDifficulty(e.target.value as WordSetDifficulty)}
+                    className="w-4 h-4 text-indigo-500 bg-black/20 border-white/10 focus:ring-indigo-500"
+                  />
+                  <span className="text-white text-sm">{level}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-white/70 mb-2">Topics</label>
+            <div className="flex flex-wrap gap-2">
+              {availableTopics.map(topic => (
+                <button
+                  key={topic}
+                  type="button"
+                  onClick={() => toggleTopic(topic)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    selectedTopics.includes(topic) 
+                      ? "bg-indigo-500/20 border-indigo-500 text-indigo-300" 
+                      : "bg-black/20 border-white/10 text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  {topic}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="pt-4 flex gap-3">
             <button

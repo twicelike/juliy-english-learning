@@ -2,6 +2,8 @@ package dictionary
 
 import (
 	"context"
+	"sort"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -22,14 +24,63 @@ func (s *service) Search(ctx context.Context, query string) ([]WordDTO, error) {
 		return []WordDTO{}, nil
 	}
 
-	docs, err := s.repo.SearchPrefix(ctx, query, 10)
+	// Fetch up to 50 candidates to allow grouping
+	docs, err := s.repo.SearchPrefix(ctx, query, 50)
 	if err != nil {
 		return nil, err
 	}
 
-	dtos := make([]WordDTO, 0, len(docs))
+	// Group by Word
+	grouped := make(map[string][]WordDocument)
+	var order []string
 	for _, doc := range docs {
-		dtos = append(dtos, mapToDTO(&doc))
+		if _, ok := grouped[doc.Word]; !ok {
+			order = append(order, doc.Word)
+		}
+		grouped[doc.Word] = append(grouped[doc.Word], doc)
+	}
+
+	// Sort the words by relevance
+	lowerQuery := strings.ToLower(query)
+	sort.Slice(order, func(i, j int) bool {
+		w1 := strings.ToLower(order[i])
+		w2 := strings.ToLower(order[j])
+
+		// 1. Exact match
+		if w1 == lowerQuery && w2 != lowerQuery {
+			return true
+		}
+		if w2 == lowerQuery && w1 != lowerQuery {
+			return false
+		}
+
+		// 2. Prefix match
+		w1Starts := strings.HasPrefix(w1, lowerQuery)
+		w2Starts := strings.HasPrefix(w2, lowerQuery)
+
+		if w1Starts && !w2Starts {
+			return true
+		}
+		if w2Starts && !w1Starts {
+			return false
+		}
+
+		// 3. Shorter words first
+		if len(w1) != len(w2) {
+			return len(w1) < len(w2)
+		}
+
+		// 4. Alphabetical fallback
+		return w1 < w2
+	})
+
+	// Map to DTOs and limit to 10 unique words
+	dtos := make([]WordDTO, 0)
+	for _, w := range order {
+		dtos = append(dtos, mapDocsToDTO(grouped[w]))
+		if len(dtos) >= 10 {
+			break
+		}
 	}
 
 	return dtos, nil
@@ -145,9 +196,11 @@ func mapToDTO(doc *WordDocument) WordDTO {
 	}
 
 	// 3. Extract Definitions and Examples
-	for _, sense := range doc.Senses {
+	for i, sense := range doc.Senses {
 		for _, gloss := range sense.Glosses {
 			defDTO := DefinitionDTO{
+				WordID:       doc.ID.Hex(),
+				SenseIndex:   i,
 				PartOfSpeech: doc.POS,
 				Definition:   gloss,
 				Examples:     []string{},
@@ -226,9 +279,11 @@ func mapDocsToDTO(docs []WordDocument) WordDTO {
 		}
 
 		// 3. Extract Definitions and Examples
-		for _, sense := range doc.Senses {
+		for i, sense := range doc.Senses {
 			for _, gloss := range sense.Glosses {
 				defDTO := DefinitionDTO{
+					WordID:       doc.ID.Hex(),
+					SenseIndex:   i,
 					PartOfSpeech: doc.POS,
 					Definition:   gloss,
 					Examples:     []string{},

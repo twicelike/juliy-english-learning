@@ -57,8 +57,11 @@ export default function Navbar() {
               <Link href="/learn" className="text-sm text-white/70 hover:text-white transition-colors">
                 Study
               </Link>
+              <Link href="/word-sets/explore" className="text-sm text-white/70 hover:text-white transition-colors">
+                Explore
+              </Link>
               <Link href="/word-sets" className="text-sm text-white/70 hover:text-white transition-colors">
-                Word Sets
+                My Sets
               </Link>
               <Link
                 href="/profile"

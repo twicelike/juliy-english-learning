@@ -3,6 +3,7 @@ package learning
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -107,7 +108,7 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 	}
 
 	wordDocByID := make(map[bson.ObjectID]*dictionary.WordDocument)
-	allWordIDs := make([]bson.ObjectID, 0)
+	allWordRefs := make([]SessionItemRef, 0)
 	seenWords := make(map[string]bool)
 
 	for i := range wordDocs {
@@ -118,47 +119,51 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 		seenWords[w] = true
 
 		wordDocByID[wordDocs[i].ID] = &wordDocs[i]
-		allWordIDs = append(allWordIDs, wordDocs[i].ID)
+		allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseIndex: 0})
 	}
 
 	// 3. Get existing progress for all bookmarked words
-	progressMap, err := s.repo.GetProgressForWords(ctx, uid, allWordIDs)
+	progressMap, err := s.repo.GetProgressForWords(ctx, uid, allWordRefs)
 	if err != nil {
 		return nil, err
 	}
 
 	// 4. Prioritise: due words first, then new words
-	var dueIDs, newIDs []bson.ObjectID
-	for _, id := range allWordIDs {
-		p, exists := progressMap[id]
+	var dueRefs, newRefs []SessionItemRef
+	for _, ref := range allWordRefs {
+		key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
+		p, exists := progressMap[key]
 		if !exists {
-			newIDs = append(newIDs, id)
+			newRefs = append(newRefs, ref)
 		} else if IsDue(p) && !IsLearned(p) {
-			dueIDs = append(dueIDs, id)
+			dueRefs = append(dueRefs, ref)
 		}
 	}
 
 	// Shuffle for variety
-	rand.Shuffle(len(dueIDs), func(i, j int) { dueIDs[i], dueIDs[j] = dueIDs[j], dueIDs[i] })
-	rand.Shuffle(len(newIDs), func(i, j int) { newIDs[i], newIDs[j] = newIDs[j], newIDs[i] })
+	rand.Shuffle(len(dueRefs), func(i, j int) { dueRefs[i], dueRefs[j] = dueRefs[j], dueRefs[i] })
+	rand.Shuffle(len(newRefs), func(i, j int) { newRefs[i], newRefs[j] = newRefs[j], newRefs[i] })
 
-	selectedIDs := append(dueIDs, newIDs...)
-	if len(selectedIDs) > limit {
-		selectedIDs = selectedIDs[:limit]
+	selectedRefs := append(dueRefs, newRefs...)
+	if len(selectedRefs) > limit {
+		selectedRefs = selectedRefs[:limit]
 	}
 
 	// 5. Build session items
-	items := make([]SessionItemDTO, 0, len(selectedIDs))
-	for _, id := range selectedIDs {
-		doc, ok := wordDocByID[id]
+	items := make([]SessionItemDTO, 0, len(selectedRefs))
+	for _, ref := range selectedRefs {
+		doc, ok := wordDocByID[ref.WordID]
 		if !ok {
 			continue
 		}
 
-		item := buildSessionItem(doc)
+		item, err := buildSessionItem(doc, ref.SenseIndex)
+		if err != nil {
+			continue
+		}
 
 		if mode == ModeQuiz {
-			choices, err := s.buildQuizChoices(ctx, doc)
+			choices, err := s.buildQuizChoices(ctx, doc, ref.SenseIndex)
 			if err != nil {
 				// Non-fatal: fall back to flashcard item for this word
 				item.Choices = nil
@@ -196,7 +201,7 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 	}
 
 	// 3. If pending < limit, fetch new available words
-	var newAvailableIDs []bson.ObjectID
+	var newAvailableRefs []SessionItemRef
 	if len(pendingIDs) < limit {
 		newLimit := limit - len(pendingIDs)
 		
@@ -209,7 +214,7 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 			
 			wordDocs, _ := s.dictRepo.GetManyByWords(ctx, bookmarkWords)
 			
-			allWordIDs := make([]bson.ObjectID, 0)
+			allWordRefs := make([]SessionItemRef, 0)
 			seenWords := make(map[string]bool)
 			for i := range wordDocs {
 				w := wordDocs[i].Word
@@ -217,14 +222,15 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 					continue
 				}
 				seenWords[w] = true
-				allWordIDs = append(allWordIDs, wordDocs[i].ID)
+				allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseIndex: 0})
 			}
 			
-			progressMap, _ := s.repo.GetProgressForWords(ctx, uid, allWordIDs)
-			for _, id := range allWordIDs {
-				if _, exists := progressMap[id]; !exists {
-					newAvailableIDs = append(newAvailableIDs, id)
-					if len(newAvailableIDs) == newLimit {
+			progressMap, _ := s.repo.GetProgressForWords(ctx, uid, allWordRefs)
+			for _, ref := range allWordRefs {
+				key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
+				if _, exists := progressMap[key]; !exists {
+					newAvailableRefs = append(newAvailableRefs, ref)
+					if len(newAvailableRefs) == newLimit {
 						break
 					}
 				}
@@ -232,12 +238,12 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 		}
 	}
 
-	if len(pendingIDs) == 0 && len(newAvailableIDs) == 0 {
+	if len(pendingIDs) == 0 && len(newAvailableRefs) == 0 {
 		return nil, errors.New("no_new_words")
 	}
 
 	// 4. Combine words for the session (Snapshot)
-	sessionWordIDs := append(pendingIDs, newAvailableIDs...)
+	sessionRefs := append(pendingIDs, newAvailableRefs...)
 
 	now := time.Now()
 	// 5. Create session in "preparing" state. Do NOT create progress yet.
@@ -245,7 +251,7 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 		ID:           bson.NewObjectID(),
 		UserID:       uid,
 		Mode:         "new_words",
-		WordIDs:      sessionWordIDs,
+		Items:        sessionRefs,
 		CurrentIndex: 0,
 		Status:       SessionPreparing,
 		CreatedAt:    now,
@@ -263,15 +269,19 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 		return nil, err
 	}
 
-	// 6. Asynchronously trigger content preparation
-	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+	// 6. Async trigger AI content preparation
+	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
+			wids := make([]bson.ObjectID, len(refs))
+			for i, r := range refs {
+				wids[i] = r.WordID
+			}
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
 		}
 		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
-	}(session.ID, sessionWordIDs)
+	}(session.ID, sessionRefs)
 
 	// 7. Build and return DTO (will show status "preparing")
 	return s.buildSessionDTO(ctx, session)
@@ -308,7 +318,7 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 		ID:           bson.NewObjectID(),
 		UserID:       uid,
 		Mode:         "review",
-		WordIDs:      dueIDs,
+		Items:        dueIDs,
 		CurrentIndex: 0,
 		Status:       SessionPreparing,
 		CreatedAt:    now,
@@ -327,9 +337,13 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 	}
 
 	// 4. Asynchronously trigger content preparation
-	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
+			wids := make([]bson.ObjectID, len(refs))
+			for i, r := range refs {
+				wids[i] = r.WordID
+			}
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
 		}
@@ -355,15 +369,39 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	if err != nil {
 		return nil, err
 	}
-	if active != nil {
-		return s.buildSessionDTO(ctx, active)
-	}
 
 	// 2. Fetch word IDs for this set (and verify ownership)
 	wordIDs, err := s.repo.GetWordIDsForWordSet(ctx, uid, sID)
 	if err != nil {
 		return nil, err
 	}
+
+	if active != nil {
+		isValid := true
+		if len(wordIDs) == 0 {
+			isValid = false
+		} else {
+			currentWordIDs := make(map[string]bool)
+			for _, ref := range wordIDs {
+				key := fmt.Sprintf("%s:%d", ref.WordID.Hex(), ref.SenseIndex)
+				currentWordIDs[key] = true
+			}
+			for _, item := range active.Items {
+				key := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
+				if !currentWordIDs[key] {
+					isValid = false
+					break
+				}
+			}
+		}
+
+		if isValid {
+			return s.buildSessionDTO(ctx, active)
+		} else {
+			_ = s.repo.UpdateSessionStatus(ctx, active.ID, SessionExpired)
+		}
+	}
+
 	if len(wordIDs) == 0 {
 		return nil, ErrNoReviewableWords
 	}
@@ -375,20 +413,21 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	}
 
 	// 4. Classify words
-	var due, learning, newWords []bson.ObjectID
+	var due, learning, newWords []SessionItemRef
 	now := time.Now()
-	for _, wid := range wordIDs {
-		p, exists := progressMap[wid]
+	for _, ref := range wordIDs {
+		key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
+		p, exists := progressMap[key]
 		if !exists {
-			newWords = append(newWords, wid)
+			newWords = append(newWords, ref)
 		} else {
 			if p.Interval >= 21 { // Mastered
 				continue
 			}
 			if p.NextReviewDate.Before(now) || p.NextReviewDate.Equal(now) {
-				due = append(due, wid)
+				due = append(due, ref)
 			} else {
-				learning = append(learning, wid)
+				learning = append(learning, ref)
 			}
 		}
 	}
@@ -408,7 +447,7 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 		WordSetID:    &sID,
 		Strategy:     &strategy,
 		WordCount:    wordCount,
-		WordIDs:      selectedIDs,
+		Items:        selectedIDs,
 		CurrentIndex: 0,
 		Status:       SessionPreparing,
 		CreatedAt:    now,
@@ -427,10 +466,15 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	// 7. Async trigger AI content preparation
-	go func(sid bson.ObjectID, wids []bson.ObjectID) {
+	// 7. Async trigger AI content preparation (Wait, we should get unique WordIDs for exercise gen, but for now we pass WordIDs)
+	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
+			// Extract WordIDs for exercise generation
+			wids := make([]bson.ObjectID, len(refs))
+			for i, r := range refs {
+				wids[i] = r.WordID
+			}
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
 			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
 		}
@@ -460,8 +504,14 @@ func (s *service) GetSessionByID(ctx context.Context, sessionID string) (*Sessio
 }
 
 func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession) (*SessionDTO, error) {
+	// Extract unique WordIDs for queries
+	wordIDs := make([]bson.ObjectID, len(session.Items))
+	for i, ref := range session.Items {
+		wordIDs[i] = ref.WordID
+	}
+
 	// Resolve dictionary words
-	wordDocs, err := s.dictRepo.GetManyByIDs(ctx, session.WordIDs)
+	wordDocs, err := s.dictRepo.GetManyByIDs(ctx, wordIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -474,20 +524,24 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 	// Fetch ONLY Fill Blank Exercises via AI
 	var fbExercises map[bson.ObjectID][]ExerciseContent
 	if s.exSvc != nil {
-		fbExercises, _ = s.exSvc.GetExercises(ctx, session.WordIDs, ExerciseFillBlank, 1)
+		fbExercises, _ = s.exSvc.GetExercises(ctx, wordIDs, ExerciseFillBlank, 1)
 	}
 
-	items := make([]SessionItemDTO, 0, len(session.WordIDs))
-	for _, id := range session.WordIDs {
+	items := make([]SessionItemDTO, 0, len(session.Items))
+	for _, ref := range session.Items {
+		id := ref.WordID
 		doc, ok := wordDocByID[id]
 		if !ok {
 			continue
 		}
 
-		item := buildSessionItem(doc)
+		item, err := buildSessionItem(doc, ref.SenseIndex)
+		if err != nil {
+			continue // Skip corrupted item
+		}
 		
 		// Inject MCQ via Database (Fast, no AI tokens)
-		choices, err := s.buildQuizChoices(ctx, doc)
+		choices, err := s.buildQuizChoices(ctx, doc, ref.SenseIndex)
 		if err == nil {
 			item.Choices = choices
 		}
@@ -550,12 +604,12 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 	totalXP := 0
 	
 	// Pre-fetch all progresses for these words to update them
-	wordIDs := make([]bson.ObjectID, len(req.Results))
+	refs := make([]SessionItemRef, len(req.Results))
 	for i, r := range req.Results {
 		w, _ := bson.ObjectIDFromHex(r.WordID)
-		wordIDs[i] = w
+		refs[i] = SessionItemRef{WordID: w, SenseIndex: r.SenseIndex}
 	}
-	progressMap, err := s.repo.GetProgressForWords(ctx, uid, wordIDs)
+	progressMap, err := s.repo.GetProgressForWords(ctx, uid, refs)
 	if err != nil {
 		return err
 	}
@@ -571,13 +625,15 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 		assessment := EvaluateLearningEvidence(res)
 		
 		// B. Retrieve or create Progress
-		p, exists := progressMap[wid]
+		key := LearningProgressKey{WordID: wid, SenseIndex: res.SenseIndex}
+		p, exists := progressMap[key]
 		if !exists {
 			p = &LearningProgress{
-				ID:        bson.NewObjectID(),
-				UserID:    uid,
-				WordID:    wid,
-				CreatedAt: now,
+				ID:         bson.NewObjectID(),
+				UserID:     uid,
+				WordID:     wid,
+				SenseIndex: res.SenseIndex,
+				CreatedAt:  now,
 			}
 		}
 
@@ -592,6 +648,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 			ID:             bson.NewObjectID(),
 			UserID:         uid,
 			WordID:         wid,
+			SenseIndex:     res.SenseIndex,
 			Quality:        quality,
 			OldInterval:    p.Interval,
 			NewInterval:    nextP.Interval,
@@ -639,7 +696,11 @@ func (s *service) DebugAdvanceTime(ctx context.Context, userID string, days int)
 // Private helpers
 // -----------------------------------------------------------------------------
 
-func buildSessionItem(doc *dictionary.WordDocument) SessionItemDTO {
+func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItemDTO, error) {
+	if senseIndex < 0 || senseIndex >= len(doc.Senses) {
+		return SessionItemDTO{}, errors.New("invalid sense_index")
+	}
+
 	// Extract IPA from first sound
 	ipa := ""
 	for _, s := range doc.Sounds {
@@ -649,38 +710,40 @@ func buildSessionItem(doc *dictionary.WordDocument) SessionItemDTO {
 		}
 	}
 
-	// Collect the primary definition (matches exercises)
 	var defs []string
 	var example string
-	for _, sense := range doc.Senses {
-		if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
-			defs = append(defs, sense.Glosses[0])
-			if len(sense.Examples) > 0 {
-				example = sense.Examples[0].Text
-			}
-			break
+	
+	sense := doc.Senses[senseIndex]
+	if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
+		defs = append(defs, sense.Glosses[0])
+		if len(sense.Examples) > 0 {
+			example = sense.Examples[0].Text
 		}
 	}
 
 	return SessionItemDTO{
 		WordID:      doc.ID.Hex(),
+		SenseIndex:  senseIndex,
 		Word:        doc.Word,
 		POS:         doc.POS,
 		IPA:         ipa,
 		Definitions: defs,
 		Example:     example,
-	}
+	}, nil
 }
 
-func (s *service) buildQuizChoices(ctx context.Context, doc *dictionary.WordDocument) ([]ChoiceDTO, error) {
-	// Correct answer: first gloss of first sense
-	correctDef := ""
-	for _, sense := range doc.Senses {
-		if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
-			correctDef = sense.Glosses[0]
-			break
-		}
+func (s *service) buildQuizChoices(ctx context.Context, doc *dictionary.WordDocument, senseIndex int) ([]ChoiceDTO, error) {
+	if senseIndex < 0 || senseIndex >= len(doc.Senses) {
+		return nil, errors.New("invalid sense_index")
 	}
+
+	// Correct answer: gloss of the specific sense
+	correctDef := ""
+	sense := doc.Senses[senseIndex]
+	if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
+		correctDef = sense.Glosses[0]
+	}
+
 	if correctDef == "" {
 		return nil, errors.New("no definition available")
 	}

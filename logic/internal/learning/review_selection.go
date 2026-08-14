@@ -4,14 +4,12 @@ import (
 	"errors"
 	"math/rand"
 	"time"
-
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type ReviewableWords struct {
-	Due      []bson.ObjectID
-	Learning []bson.ObjectID
-	New      []bson.ObjectID
+	Due      []SessionItemRef
+	Learning []SessionItemRef
+	New      []SessionItemRef
 }
 
 var ErrNoReviewableWords = errors.New("no_reviewable_words")
@@ -19,12 +17,12 @@ var ErrInvalidWordCount = errors.New("invalid_word_count")
 
 // SelectReviewWords selects a list of words to review based on the given strategy and limit.
 func SelectReviewWords(
-	due []bson.ObjectID,
-	learning []bson.ObjectID,
-	newWords []bson.ObjectID,
+	due []SessionItemRef,
+	learning []SessionItemRef,
+	newWords []SessionItemRef,
 	strategy ReviewStrategy,
 	limit int,
-) ([]bson.ObjectID, error) {
+) ([]SessionItemRef, error) {
 	if limit < 5 || limit > 25 {
 		return nil, ErrInvalidWordCount
 	}
@@ -48,24 +46,24 @@ func SelectReviewWords(
 	// Shuffle each category to avoid selecting the same words repeatedly
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	
-	shuffle := func(slice []bson.ObjectID) {
+	shuffle := func(slice []SessionItemRef) {
 		rng.Shuffle(len(slice), func(i, j int) {
 			slice[i], slice[j] = slice[j], slice[i]
 		})
 	}
 
 	// Make copies so we don't modify the originals
-	dueCopy := append([]bson.ObjectID(nil), due...)
-	learningCopy := append([]bson.ObjectID(nil), learning...)
-	newWordsCopy := append([]bson.ObjectID(nil), newWords...)
+	dueCopy := append([]SessionItemRef(nil), due...)
+	learningCopy := append([]SessionItemRef(nil), learning...)
+	newWordsCopy := append([]SessionItemRef(nil), newWords...)
 
 	shuffle(dueCopy)
 	shuffle(learningCopy)
 	shuffle(newWordsCopy)
 
-	var selected []bson.ObjectID
+	var selected []SessionItemRef
 
-	take := func(source *[]bson.ObjectID, amount int) {
+	take := func(source *[]SessionItemRef, amount int) {
 		if amount <= 0 {
 			return
 		}

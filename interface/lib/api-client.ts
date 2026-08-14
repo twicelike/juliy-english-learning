@@ -59,6 +59,9 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         // Refresh token expired or invalid
         useAuthStore.getState().clearAuth();
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
         return Promise.reject(refreshError);
       }
     }

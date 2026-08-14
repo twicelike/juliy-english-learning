@@ -65,7 +65,8 @@ function SessionRunner() {
 
         const initRes: Record<string, WordResult> = {};
         s.items.forEach((item) => {
-          initRes[item.word_id] = { word_id: item.word_id, flashcard_quality: 1 };
+          const key = `${item.word_id}:${item.sense_index}`;
+          initRes[key] = { word_id: item.word_id, sense_index: item.sense_index, flashcard_quality: 1 };
         });
         setResults(initRes);
 
@@ -193,9 +194,10 @@ function SessionRunner() {
   if (!card) return null;
 
   const handleFlashcardResult = (quality: ProgressQuality) => {
+    const key = `${card.word_id}:${card.sense_index}`;
     setResults(prev => ({
       ...prev,
-      [card.word_id]: { ...prev[card.word_id], flashcard_quality: quality }
+      [key]: { ...prev[key], flashcard_quality: quality }
     }));
     
     setFlipped(false);
@@ -214,9 +216,10 @@ function SessionRunner() {
     const choice = card.choices[choiceIndex];
     const isCorrect = choice.is_correct;
     
+    const key = `${card.word_id}:${card.sense_index}`;
     setResults(prev => ({
       ...prev,
-      [card.word_id]: { ...prev[card.word_id], multiple_choice_correct: isCorrect }
+      [key]: { ...prev[key], multiple_choice_correct: isCorrect }
     }));
   };
 
@@ -236,9 +239,11 @@ function SessionRunner() {
     
     const correctAnswer = card.fill_blank_answer || "";
     const isCorrect = fbInput.trim().toLowerCase() === correctAnswer.toLowerCase();
+    
+    const key = `${card.word_id}:${card.sense_index}`;
     setResults(prev => ({
       ...prev,
-      [card.word_id]: { ...prev[card.word_id], fill_blank_correct: isCorrect }
+      [key]: { ...prev[key], fill_blank_correct: isCorrect }
     }));
   };
 

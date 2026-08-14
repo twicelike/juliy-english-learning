@@ -19,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={geist.variable}>
-      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col">
+      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col" style={{ backgroundColor: "#0a0a12", color: "#ffffff" }}>
         <Navbar />
         <main className="flex-1 pt-16">{children}</main>
         <Footer />

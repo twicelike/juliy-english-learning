@@ -6,10 +6,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func generateObjectIDs(count int) []bson.ObjectID {
-	var ids []bson.ObjectID
+func generateObjectIDs(count int) []SessionItemRef {
+	var ids []SessionItemRef
 	for i := 0; i < count; i++ {
-		ids = append(ids, bson.NewObjectID())
+		ids = append(ids, SessionItemRef{WordID: bson.NewObjectID(), SenseIndex: 0})
 	}
 	return ids
 }
@@ -124,9 +124,9 @@ func TestSelectReviewWords_FallbackToAvailable(t *testing.T) {
 	}
 }
 
-func contains(slice []bson.ObjectID, item bson.ObjectID) bool {
+func contains(slice []SessionItemRef, item SessionItemRef) bool {
 	for _, s := range slice {
-		if s == item {
+		if s.WordID == item.WordID && s.SenseIndex == item.SenseIndex {
 			return true
 		}
 	}

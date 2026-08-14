@@ -83,9 +83,10 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	var session *SessionDTO
 	var err error
 
-	if req.Mode == "new_words" {
+	switch req.Mode {
+	case "new_words":
 		session, err = h.service.CreateNewWordsSession(c.Request.Context(), userID)
-	} else if req.Mode == "review" {
+	case "review":
 		if req.Source == "word_set" {
 			if req.WordSetID == "" {
 				domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "word_set_id is required when source is word_set")

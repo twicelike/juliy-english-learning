@@ -14,7 +14,6 @@ import { WordSetCard } from "@/components/wordsets/WordSetCard";
 import { CreateWordSetModal } from "@/components/wordsets/CreateWordSetModal";
 import { EditWordSetModal } from "@/components/wordsets/EditWordSetModal";
 
-type Tab = "my-sets" | "saved" | "explore";
 type SortMode = "updated" | "created" | "words";
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -41,7 +40,6 @@ export default function WordSetsPage() {
   const [wordSets, setWordSets] = useState<WordSetListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<Tab>("my-sets");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortMode>("updated");
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -136,11 +134,7 @@ export default function WordSetsPage() {
     }
   };
 
-  const TABS: { key: Tab; label: string; locked: boolean }[] = [
-    { key: "my-sets", label: "My Sets", locked: false },
-    { key: "saved", label: "Saved", locked: true },
-    { key: "explore", label: "Explore", locked: true },
-  ];
+
 
   if (loading) {
     return (
@@ -194,35 +188,9 @@ export default function WordSetsPage() {
         </div>
       </div>
 
-      {/* ─── Tabs ─────────────────────────────────────────────────── */}
-      <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
-        <div className="flex gap-1 min-w-max border-b border-white/10 pb-0">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => !tab.locked && setActiveTab(tab.key)}
-              title={tab.locked ? "Coming soon" : undefined}
-              className={`relative px-5 py-3 text-sm font-semibold transition-all rounded-t-xl ${
-                tab.locked
-                  ? "text-white/20 cursor-not-allowed"
-                  : activeTab === tab.key
-                  ? "text-white bg-white/5 border border-b-0 border-white/10"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
-              {tab.label}
-              {tab.locked && (
-                <span className="ml-1.5 text-xs text-white/20">🔒</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ─── My Sets Tab Content ────────────────────────────────── */}
-      {activeTab === "my-sets" && (
-        <>
-          {/* Search + Sort Bar */}
+      {/* ─── My Sets Content ────────────────────────────────── */}
+      <>
+        {/* Search + Sort Bar */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <svg
@@ -322,17 +290,7 @@ export default function WordSetsPage() {
               ))}
             </div>
           )}
-        </>
-      )}
-
-      {/* ─── Saved / Explore Placeholder ───────────────────────── */}
-      {(activeTab === "saved" || activeTab === "explore") && (
-        <div className="py-24 text-center rounded-2xl border border-white/5 bg-white/[0.02]">
-          <div className="text-5xl mb-4">🔒</div>
-          <h2 className="text-xl font-bold text-white mb-2">Coming Soon</h2>
-          <p className="text-white/40 text-sm">This feature is under development.</p>
-        </div>
-      )}
+      </>
 
       {/* ─── Modals ────────────────────────────────────────────── */}
       {isCreateModalOpen && (
