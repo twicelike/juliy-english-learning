@@ -10,11 +10,13 @@ import (
 	"github.com/english/backend/internal/cache"
 	"github.com/english/backend/internal/config"
 	"github.com/english/backend/internal/dictionary"
+	"github.com/english/backend/internal/enricher"
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/handler"
 	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/middleware"
 	"github.com/english/backend/internal/profile"
+	"github.com/english/backend/internal/translation"
 	"github.com/english/backend/internal/user"
 	"github.com/english/backend/internal/wordset"
 	"github.com/english/backend/internal/writing"
@@ -52,6 +54,45 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		dictRepo := dictionary.NewRepository(mongoClient.Database("dictionary"))
 		dictService := dictionary.NewService(dictRepo)
 		dictHandler := dictionary.NewHandler(dictService)
+
+		// Translation Repo
+		translationRepo := translation.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = translationRepo.EnsureIndexes(ctx)
+
+		// AI Tutor & Clients
+		var rawAI ai.AIClient
+		var errAI error
+
+		if cfg.GroqAPIKey != "" {
+			rawAI, errAI = aiclient.NewGroqClient(cfg.GroqAPIKey, "llama-3.3-70b-versatile")
+		} else if cfg.HFToken != "" {
+			rawAI, errAI = aiclient.NewHuggingFaceClient(cfg.HFToken, cfg.HFModel)
+		} else if cfg.OpenRouterAPIKey != "" {
+			rawAI, errAI = aiclient.NewOpenRouterClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel)
+		} else if cfg.OllamaEndpoint != "" {
+			rawAI, errAI = aiclient.NewOllamaClient(cfg.OllamaEndpoint, cfg.OllamaModel)
+		} else if cfg.GeminiAPIKey != "" {
+			rawAI, errAI = aiclient.NewGeminiClient(context.Background(), cfg.GeminiAPIKey, "gemini-2.0-flash")
+		}
+
+		var translationService translation.Service
+		var aiClientWrapped ai.AIClient
+		if rawAI != nil && errAI == nil {
+			aiClientWrapped = aiclient.WithMetrics(aiclient.WithRetry(rawAI, 2))
+			translationService = translation.NewService(aiClientWrapped, translationRepo)
+			
+			// Initialize and start Translation Worker
+			translationWorker := translation.NewWorker(
+				translationRepo, 
+				translationService, 
+				dictService, 
+				cfg.TranslationBatchSize,
+				cfg.TranslationPollInterval,
+				cfg.TranslationWorkerConcur,
+				cfg.TranslationMaxRetries,
+			)
+			translationWorker.Start(ctx)
+		}
 
 		words := v1.Group("/words")
 		{
@@ -107,7 +148,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
 		_ = learnRepo.EnsureIndexes(ctx)
 
-		wordSetService := wordset.NewService(wordSetRepo, authRepo, dictService, learnRepo)
+		wordSetService := wordset.NewService(wordSetRepo, authRepo, dictService, learnRepo, translationService)
 		wordSetHandler := wordset.NewHandler(wordSetService)
 
 		wordSetRoutes := v1.Group("/word-sets")
@@ -117,6 +158,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			wordSetRoutes.GET("", wordSetHandler.List)
 			wordSetRoutes.GET("/explore", wordSetHandler.Explore)
 			wordSetRoutes.GET("/topics", wordSetHandler.GetTopics)
+			wordSetRoutes.GET("/languages", wordSetHandler.GetSupportedLanguages)
 			wordSetRoutes.GET("/:id", wordSetHandler.Get)
 			wordSetRoutes.PATCH("/:id", wordSetHandler.Update)
 			wordSetRoutes.DELETE("/:id", wordSetHandler.Delete)
@@ -129,26 +171,10 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			wordSetRoutes.DELETE("/:id/words", wordSetHandler.BatchDeleteWords)
 			wordSetRoutes.DELETE("/:id/words/:wordId", wordSetHandler.RemoveWord)
 			wordSetRoutes.PATCH("/:id/words/reorder", wordSetHandler.ReorderWords)
-		}
-
-		// AI Tutor
-		var rawAI ai.AIClient
-		var errAI error
-
-		if cfg.HFToken != "" {
-			rawAI, errAI = aiclient.NewHuggingFaceClient(cfg.HFToken, cfg.HFModel)
-		} else if cfg.OpenRouterAPIKey != "" {
-			rawAI, errAI = aiclient.NewOpenRouterClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel)
-		} else if cfg.OllamaEndpoint != "" {
-			rawAI, errAI = aiclient.NewOllamaClient(cfg.OllamaEndpoint, cfg.OllamaModel)
-		} else if cfg.GroqAPIKey != "" {
-			rawAI, errAI = aiclient.NewGroqClient(cfg.GroqAPIKey, "llama3-70b-8192")
-		} else if cfg.GeminiAPIKey != "" {
-			rawAI, errAI = aiclient.NewGeminiClient(context.Background(), cfg.GeminiAPIKey, "gemini-2.0-flash")
+			wordSetRoutes.PATCH("/:id/words/:wordId/annotation", wordSetHandler.UpdateAnnotation)
 		}
 
 		if rawAI != nil && errAI == nil {
-			aiClientWrapped := aiclient.WithMetrics(aiclient.WithRetry(rawAI, 2))
 			aiCache := ai.NewMemoryCache()
 			aiLimiter := ai.NewMemoryRateLimiter(cfg.AIRateLimit)
 			aiService := ai.NewService(aiClientWrapped, aiCache, dictRepo, aiLimiter)
@@ -166,7 +192,9 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			exSvc = learning.NewExerciseContentService(exerciseContentRepo, dictRepo, rawAI)
 		}
 
-		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc)
+		
+		sessionEnrich := enricher.NewSessionEnricher(translationService, wordSetService)
+		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc, sessionEnrich)
 		learnHandler := learning.NewHandler(learnService)
 
 		learnRoutes := v1.Group("/learning")

@@ -64,6 +64,10 @@ func (m *mockRepo) ReorderWordSetItems(ctx context.Context, setID bson.ObjectID,
 	return nil
 }
 
+func (m *mockRepo) UpdateWordSetItemAnnotation(ctx context.Context, setID, wordID bson.ObjectID, annotation *wordset.UserAnnotation) error {
+	return nil
+}
+
 func (m *mockRepo) EnsureIndexes(ctx context.Context) error {
 	return nil
 }
@@ -77,8 +81,8 @@ func (m *mockRepo) BatchRemoveWordSetItems(ctx context.Context, setID bson.Objec
 }
 
 func TestCreateWordSet(t *testing.T) {
-	repo := &mockRepo{}
-	svc := wordset.NewService(repo, nil, nil, nil)
+	mockRepo := new(mockRepo)
+	svc := wordset.NewService(mockRepo, nil, nil, nil, nil)
 	userID := bson.NewObjectID()
 
 	req := wordset.CreateWordSetRequest{

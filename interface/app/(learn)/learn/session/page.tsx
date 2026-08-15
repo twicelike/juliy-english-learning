@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LearningAPI, SessionDTO, SessionItemDTO, WordResult, ProgressQuality } from "@/lib/learning-api";
 import { useAuthStore } from "@/store/auth-store";
+import { Flashcard } from "@/components/learn/Flashcard";
+import { RatingBar } from "@/components/learn/RatingBar";
+import { SessionProgress } from "@/components/learn/SessionProgress";
 
 type Phase = "initializing" | "preparing" | "flashcard" | "mcq" | "fill_blank" | "submitting" | "done" | "error";
 
@@ -293,116 +296,26 @@ function SessionRunner() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-start px-6 py-12">
-      
-      {/* Header */}
-      <div className="w-full max-w-lg mb-8">
-        <div className="flex justify-between items-center mb-4 relative">
-          <div className="flex gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "flashcard" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>1. Recall</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "mcq" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>2. Quiz</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "fill_blank" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>3. Context</span>
-          </div>
-          
-          {/* Suspend Button (Top Right corner) */}
-          <button 
-            onClick={() => {
-              if (confirm("Are you sure you want to suspend this word? It will never appear in your learning sessions again.")) {
-                handleSuspendWord();
-              }
-            }}
-            className="absolute -right-2 top-0 px-3 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors border border-red-500/20"
-            title="Suspend this word permanently"
-          >
-            🚫 Suspend
-          </button>
-        </div>
-        
-        {/* Progress Bar */}
-        <div className="w-full flex justify-between items-center text-white/50 text-sm mb-4 font-mono uppercase tracking-widest relative">
-          <span>{progressPct}% Completed</span>
-          <span>{currentIndex + 1} / {items.length}</span>
-        </div>
-        <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
-      </div>
+      <SessionProgress 
+        currentIndex={currentIndex} 
+        totalItems={items.length} 
+        onSuspend={() => {
+          if (confirm("Are you sure you want to suspend this word? It will never appear in your learning sessions again.")) {
+            handleSuspendWord();
+          }
+        }}
+        phase={phase}
+      />
 
       {/* PHASE 1: FLASHCARD */}
       {phase === "flashcard" && (
-        <div className="w-full max-w-md flex flex-col items-center">
-          <div
-            className="w-full h-72 cursor-pointer"
-            style={{ perspective: "1200px" }}
-            onClick={() => !flipped && setFlipped(true)}
-          >
-            <div
-              className="relative w-full h-full transition-transform duration-500"
-              style={{
-                transformStyle: "preserve-3d",
-                transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-              }}
-            >
-              {/* Front */}
-              <div
-                className="absolute inset-0 rounded-3xl bg-white/5 border border-white/10 flex flex-col items-center justify-center p-8 gap-3"
-                style={{ backfaceVisibility: "hidden" }}
-              >
-                <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-medium">{card.pos}</span>
-                <h2 className="text-5xl font-bold text-white">{card.word}</h2>
-                {card.ipa && <p className="text-white/40 font-mono">{card.ipa}</p>}
-                <p className="text-white/30 text-sm mt-4">Tap to reveal definition</p>
-              </div>
-
-              {/* Back */}
-              <div
-                className="absolute inset-0 rounded-3xl bg-indigo-900/40 border border-indigo-500/30 flex flex-col items-center justify-center p-8 gap-4"
-                style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-              >
-                <ul className="list-disc list-inside space-y-1.5 text-center">
-                  {card.definitions.slice(0, 3).map((d, i) => (
-                    <li key={i} className="text-white/80 text-sm">{d}</li>
-                  ))}
-                </ul>
-                {card.example && (
-                  <p className="text-white/40 text-xs italic text-center">"{card.example}"</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 w-full max-w-md space-y-3 min-h-[64px]">
-            {flipped ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleFlashcardResult(1)}
-                  className="flex-1 py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/25 transition-colors"
-                >
-                  <div className="text-sm opacity-60 font-normal mb-1">Again</div>
-                </button>
-                <button
-                  onClick={() => handleFlashcardResult(3)}
-                  className="flex-1 py-3 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-semibold hover:bg-orange-500/25 transition-colors"
-                >
-                  <div className="text-sm opacity-60 font-normal mb-1">Hard</div>
-                </button>
-                <button
-                  onClick={() => handleFlashcardResult(4)}
-                  className="flex-1 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-semibold hover:bg-blue-500/25 transition-colors"
-                >
-                  <div className="text-sm opacity-60 font-normal mb-1">Good</div>
-                </button>
-                <button
-                  onClick={() => handleFlashcardResult(5)}
-                  className="flex-1 py-3 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 font-semibold hover:bg-green-500/25 transition-colors"
-                >
-                  <div className="text-sm opacity-60 font-normal mb-1">Easy</div>
-                </button>
-              </div>
-            ) : null}
-          </div>
+        <div className="w-full max-w-md flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+          <Flashcard 
+            card={card} 
+            flipped={flipped} 
+            onFlip={() => setFlipped(prev => !prev)} 
+          />
+          {flipped && <RatingBar onRating={handleFlashcardResult} />}
         </div>
       )}
 

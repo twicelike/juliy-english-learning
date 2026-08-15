@@ -466,15 +466,18 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 		return err
 	}
 
-	// 5. learning_sessions: {user_id: 1, mode: 1} partial status = in_progress
+	// 5. learning_sessions: {user_id: 1, status: 1, mode: 1}
+	// Drop old partial index if exists
+	_ = r.sessionsColl.Indexes().DropOne(ctx, "user_id_1_mode_1")
+	
+	// We do not use a partial index here because queries search for multiple statuses ($in: ["preparing", "active"])
+	// and a partial index on "in_progress" won't be used, causing COLLSCANs.
 	_, err = r.sessionsColl.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "user_id", Value: 1},
+			{Key: "status", Value: 1},
 			{Key: "mode", Value: 1},
 		},
-		Options: options.Index().
-			SetUnique(true).
-			SetPartialFilterExpression(bson.M{"status": "in_progress"}),
 	})
 	return err
 }

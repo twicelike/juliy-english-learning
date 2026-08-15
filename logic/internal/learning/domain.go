@@ -196,9 +196,19 @@ type SessionItemDTO struct {
 	IPA               string      `json:"ipa"`
 	Definitions       []string    `json:"definitions"` // first 3 glosses
 	Example           string      `json:"example"`
+
+	TranslationCandidates []string           `json:"translation_candidates,omitempty"`
+	Annotation            *UserAnnotationDTO `json:"annotation,omitempty"`
+
 	Choices           []ChoiceDTO `json:"choices"`             // MCQ
 	FillBlankQuestion string      `json:"fill_blank_question"` // FB
 	FillBlankAnswer   string      `json:"fill_blank_answer"`   // FB
+}
+
+// UserAnnotationDTO is the subset of wordset.UserAnnotation exposed to learning sessions.
+type UserAnnotationDTO struct {
+	Translation string `json:"translation"`
+	Note        string `json:"note,omitempty"`
 }
 
 // SessionDTO is the response body for GET /learning/session and POST /learning/session.
@@ -260,6 +270,11 @@ type ExerciseContentRepository interface {
 	Save(ctx context.Context, content *ExerciseContent) error
 	GetRandomExercises(ctx context.Context, wordIDs []bson.ObjectID, exType ExerciseType, limitPerWord int) (map[bson.ObjectID][]ExerciseContent, error)
 	EnsureIndexes(ctx context.Context) error
+}
+
+// SessionEnricher batch loads missing domain data (like translations/annotations) into SessionItemDTOs
+type SessionEnricher interface {
+	EnrichItems(ctx context.Context, userID bson.ObjectID, targetLang string, items []SessionItemDTO) ([]SessionItemDTO, error)
 }
 
 // -----------------------------------------------------------------------------

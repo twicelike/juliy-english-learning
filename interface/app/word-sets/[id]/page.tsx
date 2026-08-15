@@ -24,7 +24,7 @@ const progressColors: Record<string, string> = {
 type LastDeletedState = {
   words: WordViewerItemDTO[];
   wordIds: string[];
-  previousActiveWordId: string | null;
+  previousActiveWordKey: string | null;
 } | null;
 
 export default function WordSetViewerPage() {
@@ -36,8 +36,8 @@ export default function WordSetViewerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ID-based active word navigation
-  const [activeWordId, setActiveWordId] = useState<string | null>(null);
+  // Composite key-based active word navigation (id:senseIndex)
+  const [activeWordKey, setActiveWordKey] = useState<string | null>(null);
 
   const [isCloning, setIsCloning] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -68,7 +68,7 @@ export default function WordSetViewerPage() {
       ]);
       setSet(setRes);
       setWords(wordsRes);
-      if (wordsRes.length > 0) setActiveWordId(wordsRes[0].id);
+      if (wordsRes.length > 0) setActiveWordKey(`${wordsRes[0].id}:${wordsRes[0].sense_index ?? 0}`);
     } catch (err: any) {
       console.error(err);
       setError("Failed to load Word Set.");
@@ -77,8 +77,8 @@ export default function WordSetViewerPage() {
     }
   };
 
-  const activeWord = useMemo(() => words.find((w) => w.id === activeWordId) ?? null, [words, activeWordId]);
-  const activeWordIndex = useMemo(() => words.findIndex((w) => w.id === activeWordId), [words, activeWordId]);
+  const activeWord = useMemo(() => words.find((w) => `${w.id}:${w.sense_index ?? 0}` === activeWordKey) ?? null, [words, activeWordKey]);
+  const activeWordIndex = useMemo(() => words.findIndex((w) => `${w.id}:${w.sense_index ?? 0}` === activeWordKey), [words, activeWordKey]);
 
   // Memoize search results
   const filteredWords = useMemo(() => {
@@ -160,13 +160,19 @@ export default function WordSetViewerPage() {
     setUndoVisible(false); setLastDeleted(null);
   };
 
-  const resolveNextActiveWordId = (remainingWords: WordViewerItemDTO[], deletedIds: Set<string>, currentActiveId: string | null): string | null => {
+  const resolveNextActiveWordKey = (remainingWords: WordViewerItemDTO[], deletedKeys: Set<string>, currentActiveKey: string | null): string | null => {
     if (remainingWords.length === 0) return null;
-    if (currentActiveId && !deletedIds.has(currentActiveId)) return currentActiveId;
-    const currentIdx = words.findIndex((w) => w.id === currentActiveId);
-    for (let i = currentIdx + 1; i < words.length; i++) { if (!deletedIds.has(words[i].id)) return words[i].id; }
-    for (let i = currentIdx - 1; i >= 0; i--) { if (!deletedIds.has(words[i].id)) return words[i].id; }
-    return remainingWords[0].id;
+    if (currentActiveKey && !deletedKeys.has(currentActiveKey)) return currentActiveKey;
+    const currentIdx = words.findIndex((w) => `${w.id}:${w.sense_index ?? 0}` === currentActiveKey);
+    for (let i = currentIdx + 1; i < words.length; i++) { 
+      const key = `${words[i].id}:${words[i].sense_index ?? 0}`;
+      if (!deletedKeys.has(key)) return key; 
+    }
+    for (let i = currentIdx - 1; i >= 0; i--) { 
+      const key = `${words[i].id}:${words[i].sense_index ?? 0}`;
+      if (!deletedKeys.has(key)) return key; 
+    }
+    return `${remainingWords[0].id}:${remainingWords[0].sense_index ?? 0}`;
   };
 
   const handleRemoveWords = async () => {
@@ -175,14 +181,14 @@ export default function WordSetViewerPage() {
     const wordIdsList = Array.from(selectedWordIds).map((key) => key.split(":")[0]);
     const deletedKeys = new Set(selectedWordIds);
     const deletedWords = words.filter((w) => deletedKeys.has(`${w.id}:${w.sense_index ?? 0}`));
-    const snapshot: LastDeletedState = { words: deletedWords, wordIds: wordIdsList, previousActiveWordId: activeWordId };
+    const snapshot: LastDeletedState = { words: deletedWords, wordIds: wordIdsList, previousActiveWordKey: activeWordKey };
     const prevWords = words;
-    const prevActiveId = activeWordId;
+    const prevActiveKey = activeWordKey;
     const newWords = words.filter((w) => !deletedKeys.has(`${w.id}:${w.sense_index ?? 0}`));
-    const deletedIdSet = new Set(deletedWords.map((w) => w.id));
-    const nextActiveId = resolveNextActiveWordId(newWords, deletedIdSet, activeWordId);
+    const deletedIdSet = new Set(deletedWords.map((w) => `${w.id}:${w.sense_index ?? 0}`));
+    const nextActiveKey = resolveNextActiveWordKey(newWords, deletedIdSet, activeWordKey);
     setWords(newWords);
-    setActiveWordId(nextActiveId);
+    setActiveWordKey(nextActiveKey);
     setSet((prev) => prev ? { ...prev, word_count: Math.max(0, prev.word_count - deletedWords.length) } : prev);
     setSelectedWordIds(new Set());
     setShowDeleteConfirm(false);
@@ -196,7 +202,7 @@ export default function WordSetViewerPage() {
     } catch (err) {
       console.error(err);
       setWords(prevWords);
-      setActiveWordId(prevActiveId);
+      setActiveWordKey(prevActiveKey);
       setSet((prev) => prev ? { ...prev, word_count: prev.word_count + deletedWords.length } : prev);
       alert("Failed to remove words. Please try again.");
     } finally { setIsDeleting(false); }
@@ -206,12 +212,12 @@ export default function WordSetViewerPage() {
     if (!lastDeleted || isRestoring) return;
     const snapshot = lastDeleted;
     const prevWords = words;
-    const prevActiveId = activeWordId;
-    const restoredWords = snapshot.words.filter((w) => !words.find((e) => e.id === w.id));
+    const prevActiveKey = activeWordKey;
+    const restoredWords = snapshot.words.filter((w) => !words.find((e) => e.id === w.id && e.sense_index === w.sense_index));
     const finalWords = [...words, ...restoredWords];
     clearUndo();
     setWords(finalWords);
-    setActiveWordId(snapshot.previousActiveWordId ?? (finalWords[0]?.id ?? null));
+    setActiveWordKey(snapshot.previousActiveWordKey ?? (finalWords.length > 0 ? `${finalWords[0].id}:${finalWords[0].sense_index ?? 0}` : null));
     setSet((prev) => prev ? { ...prev, word_count: prev.word_count + snapshot.wordIds.length } : prev);
     setIsRestoring(true);
     try {
@@ -219,7 +225,7 @@ export default function WordSetViewerPage() {
     } catch (err) {
       console.error(err);
       setWords(prevWords);
-      setActiveWordId(prevActiveId);
+      setActiveWordKey(prevActiveKey);
       setSet((prev) => prev ? { ...prev, word_count: prev.word_count - snapshot.wordIds.length } : prev);
       setLastDeleted(snapshot);
       setUndoVisible(true);
@@ -411,7 +417,7 @@ export default function WordSetViewerPage() {
               <div className="p-4 text-center text-white/30 text-sm">No words found.</div>
             ) : (
               filteredWords.map((word) => {
-                const isActive = word.id === activeWordId;
+                const isActive = `${word.id}:${word.sense_index ?? 0}` === activeWordKey;
                 const isSelected = selectedWordIds.has(`${word.id}:${word.sense_index ?? 0}`);
                 const wordOriginalIndex = words.indexOf(word);
                 return (
@@ -434,7 +440,7 @@ export default function WordSetViewerPage() {
                         {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                       </button>
                     )}
-                    <button onClick={() => setActiveWordId(word.id)} className="flex-1 text-left flex items-center justify-between min-w-0">
+                    <button onClick={() => setActiveWordKey(`${word.id}:${word.sense_index ?? 0}`)} className="flex-1 text-left flex items-center justify-between min-w-0">
                       <div className="flex flex-col truncate pr-2">
                         <div className="flex items-center gap-3 truncate">
                           <span className={`text-xs font-mono w-5 opacity-50 shrink-0 ${isActive ? "text-indigo-300" : "text-white"}`}>{(wordOriginalIndex + 1).toString().padStart(2, "0")}</span>
@@ -498,8 +504,8 @@ export default function WordSetViewerPage() {
                   isActive={true}
                   hasPrev={activeWordIndex > 0}
                   hasNext={activeWordIndex < words.length - 1}
-                  onPrev={() => { if (activeWordIndex > 0) setActiveWordId(words[activeWordIndex - 1].id); }}
-                  onNext={() => { if (activeWordIndex < words.length - 1) setActiveWordId(words[activeWordIndex + 1].id); }}
+                  onPrev={() => { if (activeWordIndex > 0) setActiveWordKey(`${words[activeWordIndex - 1].id}:${words[activeWordIndex - 1].sense_index ?? 0}`); }}
+                  onNext={() => { if (activeWordIndex < words.length - 1) setActiveWordKey(`${words[activeWordIndex + 1].id}:${words[activeWordIndex + 1].sense_index ?? 0}`); }}
                 />
               </div>
               <div className="shrink-0 mt-6 text-center text-white/30 text-sm font-mono tracking-widest">{activeWordIndex + 1} / {words.length}</div>

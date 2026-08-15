@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UpdateWordSetRequest, WordSet, WordSetVisibility, WordSetDifficulty, WordSetAPI } from "@/lib/wordset-api";
+import { UpdateWordSetRequest, WordSet, WordSetVisibility, WordSetDifficulty, WordSetAPI, Language } from "@/lib/wordset-api";
 
 interface Props {
   set: WordSet;
@@ -15,9 +15,12 @@ export function EditWordSetModal({ set, onClose, onSubmit, isSubmitting }: Props
   const [difficulty, setDifficulty] = useState<WordSetDifficulty>(set.difficulty || "Beginner");
   const [selectedTopics, setSelectedTopics] = useState<string[]>(set.topics || []);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [annotationLanguage, setAnnotationLanguage] = useState<string>(set.annotation_language || "vi");
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
 
   useEffect(() => {
     WordSetAPI.getTopics().then(setAvailableTopics).catch(console.error);
+    WordSetAPI.getSupportedLanguages().then(setAvailableLanguages).catch(console.error);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -82,6 +85,18 @@ export function EditWordSetModal({ set, onClose, onSubmit, isSubmitting }: Props
               className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors min-h-[100px]"
               maxLength={500}
             />
+          </div>
+                    <div>
+            <label className="block text-sm text-white/70 mb-1">Translation Language</label>
+            <select
+              value={annotationLanguage}
+              onChange={(e) => setAnnotationLanguage(e.target.value)}
+              className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+            >
+              {availableLanguages.map(l => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm text-white/70 mb-1">Visibility</label>

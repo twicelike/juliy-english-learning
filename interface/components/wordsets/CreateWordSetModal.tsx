@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CreateWordSetRequest, WordSetVisibility, WordSetDifficulty, WordSetAPI } from "@/lib/wordset-api";
+import { CreateWordSetRequest, WordSetVisibility, WordSetDifficulty, WordSetAPI, Language } from "@/lib/wordset-api";
 
 interface Props {
   onClose: () => void;
@@ -14,15 +14,18 @@ export function CreateWordSetModal({ onClose, onSubmit, isSubmitting }: Props) {
   const [difficulty, setDifficulty] = useState<WordSetDifficulty>("Beginner");
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [annotationLanguage, setAnnotationLanguage] = useState<string>("vi");
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
 
   useEffect(() => {
     WordSetAPI.getTopics().then(setAvailableTopics).catch(console.error);
+    WordSetAPI.getSupportedLanguages().then(setAvailableLanguages).catch(console.error);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit({ name, description, visibility, difficulty, topics: selectedTopics });
+    onSubmit({ name, description, visibility, difficulty, topics: selectedTopics, annotation_language: annotationLanguage, source_language: "en" });
   };
 
   const toggleTopic = (topic: string) => {
@@ -64,6 +67,18 @@ export function CreateWordSetModal({ onClose, onSubmit, isSubmitting }: Props) {
               placeholder="What is this set about?"
               maxLength={500}
             />
+          </div>
+                    <div>
+            <label className="block text-sm text-white/70 mb-1">Translation Language</label>
+            <select
+              value={annotationLanguage}
+              onChange={(e) => setAnnotationLanguage(e.target.value)}
+              className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+            >
+              {availableLanguages.map(l => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm text-white/70 mb-1">Visibility</label>

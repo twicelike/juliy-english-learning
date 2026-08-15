@@ -41,22 +41,31 @@ type WordSet struct {
 	UserID      bson.ObjectID     `bson:"user_id" json:"-"`
 	Name        string            `bson:"name" json:"name"`
 	Description string            `bson:"description" json:"description"`
-	Visibility  WordSetVisibility `bson:"visibility" json:"visibility"`
-	Topics      []string          `bson:"topics" json:"topics"`
-	Difficulty  WordSetDifficulty `bson:"difficulty" json:"difficulty"`
-	WordCount   int               `bson:"word_count" json:"word_count"`
-	CloneCount  int               `bson:"clone_count" json:"clone_count"`
-	CreatedAt   time.Time         `bson:"created_at" json:"created_at"`
-	UpdatedAt   time.Time         `bson:"updated_at" json:"updated_at"`
+	Visibility         WordSetVisibility `bson:"visibility" json:"visibility"`
+	Topics             []string          `bson:"topics" json:"topics"`
+	Difficulty         WordSetDifficulty `bson:"difficulty" json:"difficulty"`
+	SourceLanguage     string            `bson:"source_language" json:"source_language"`
+	AnnotationLanguage string            `bson:"annotation_language" json:"annotation_language"`
+	WordCount          int               `bson:"word_count" json:"word_count"`
+	CloneCount         int               `bson:"clone_count" json:"clone_count"`
+	CreatedAt          time.Time         `bson:"created_at" json:"created_at"`
+	UpdatedAt          time.Time         `bson:"updated_at" json:"updated_at"`
 }
 
 type WordSetItem struct {
-	ID         bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	SetID      bson.ObjectID `bson:"set_id" json:"set_id"`
-	WordID     bson.ObjectID `bson:"word_id" json:"word_id"`
-	SenseIndex int           `bson:"sense_index" json:"sense_index"`
-	Position   int           `bson:"position" json:"position"`
-	CreatedAt  time.Time     `bson:"created_at" json:"created_at"`
+	ID         bson.ObjectID   `bson:"_id,omitempty" json:"id"`
+	SetID      bson.ObjectID   `bson:"set_id" json:"set_id"`
+	WordID     bson.ObjectID   `bson:"word_id" json:"word_id"`
+	SenseIndex int             `bson:"sense_index" json:"sense_index"`
+	Position   int             `bson:"position" json:"position"`
+	Annotation *UserAnnotation `bson:"annotation,omitempty" json:"annotation,omitempty"`
+	CreatedAt  time.Time       `bson:"created_at" json:"created_at"`
+}
+
+type UserAnnotation struct {
+	LanguageCode string `bson:"language_code" json:"language_code"`
+	Text         string `bson:"text" json:"text"`
+	Source       string `bson:"source" json:"source"` // "ai" or "manual"
 }
 
 // DTOs
@@ -86,25 +95,34 @@ type WordSetListResponse struct {
 }
 
 type CreateWordSetRequest struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Visibility  WordSetVisibility `json:"visibility"`
-	Topics      []string          `json:"topics"`
-	Difficulty  WordSetDifficulty `json:"difficulty"`
+	Name               string            `json:"name"`
+	Description        string            `json:"description"`
+	Visibility         WordSetVisibility `json:"visibility"`
+	Topics             []string          `json:"topics"`
+	Difficulty         WordSetDifficulty `json:"difficulty"`
+	SourceLanguage     string            `json:"source_language"`
+	AnnotationLanguage string            `json:"annotation_language"`
+}
+
+type UpdateAnnotationRequest struct {
+	Text string `json:"text"`
 }
 
 type UpdateWordSetRequest struct {
-	Name        *string            `json:"name"`
-	Description *string            `json:"description"`
-	Visibility  *WordSetVisibility `json:"visibility"`
-	Topics      *[]string          `json:"topics"`
-	Difficulty  *WordSetDifficulty `json:"difficulty"`
+	Name               *string            `json:"name"`
+	Description        *string            `json:"description"`
+	Visibility         *WordSetVisibility `json:"visibility"`
+	Topics             *[]string          `json:"topics"`
+	Difficulty         *WordSetDifficulty `json:"difficulty"`
+	AnnotationLanguage *string            `json:"annotation_language"`
 }
 
 type WordViewerItemDTO struct {
 	dictionary.WordDTO
-	SenseIndex    int    `json:"sense_index"`
-	ProgressState string `json:"progress_state"`
+	SenseIndex            int             `json:"sense_index"`
+	ProgressState         string          `json:"progress_state"`
+	TranslationCandidates []string        `json:"translation_candidates"`
+	Annotation            *UserAnnotation `json:"annotation,omitempty"`
 }
 
 type AddWordRequest struct {
@@ -177,6 +195,7 @@ type Repository interface {
 	RemoveWordSetItem(ctx context.Context, setID, wordID bson.ObjectID) error
 	BatchRemoveWordSetItems(ctx context.Context, setID bson.ObjectID, wordIDs []bson.ObjectID) (int64, error)
 	ReorderWordSetItems(ctx context.Context, setID bson.ObjectID, wordIDs []bson.ObjectID) error
+	UpdateWordSetItemAnnotation(ctx context.Context, setID, wordID bson.ObjectID, annotation *UserAnnotation) error
 
 	EnsureIndexes(ctx context.Context) error
 }
@@ -198,4 +217,6 @@ type Service interface {
 	ReorderWords(ctx context.Context, userID, setID bson.ObjectID, req ReorderWordsRequest) error
 
 	GetWordSetWords(ctx context.Context, userID, setID bson.ObjectID) ([]WordViewerItemDTO, error)
+	UpdateAnnotation(ctx context.Context, userID, setID, wordID bson.ObjectID, text string) (*UserAnnotation, error)
+	GetAnnotationsByUserAndWordIDs(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) (map[bson.ObjectID]*UserAnnotation, error)
 }

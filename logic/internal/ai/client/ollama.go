@@ -109,3 +109,8 @@ func (o *OllamaClient) GenerateJSON(ctx context.Context, prompt string, _ any, d
 
 	return nil
 }
+
+
+func (o *OllamaClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	return "", fmt.Errorf("GenerateText not implemented for OllamaClient")
+}

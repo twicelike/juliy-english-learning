@@ -12,10 +12,17 @@ export interface WordSet {
   visibility: WordSetVisibility;
   topics: string[];
   difficulty: WordSetDifficulty;
+  source_language: string;
+  annotation_language: string;
   word_count: number;
   clone_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Language {
+  code: string;
+  name: string;
 }
 
 export interface SavedSenseRef {
@@ -47,6 +54,8 @@ export interface CreateWordSetRequest {
   visibility: WordSetVisibility;
   topics?: string[];
   difficulty?: WordSetDifficulty;
+  source_language?: string;
+  annotation_language?: string;
 }
 
 export interface UpdateWordSetRequest {
@@ -55,6 +64,7 @@ export interface UpdateWordSetRequest {
   visibility?: WordSetVisibility;
   topics?: string[];
   difficulty?: WordSetDifficulty;
+  annotation_language?: string;
 }
 
 export interface ExploreWordSetsRequest {
@@ -79,6 +89,12 @@ export type ProgressState = "new" | "learning" | "due" | "mastered";
 export interface WordViewerItemDTO extends WordDTO {
   progress_state: ProgressState;
   sense_index?: number;
+  translation_candidates?: string[];
+  annotation?: {
+    text: string;
+    source: string;
+    language_code: string;
+  };
 }
 
 export const WordSetAPI = {
@@ -95,6 +111,11 @@ export const WordSetAPI = {
   getTopics: async (): Promise<string[]> => {
     const res = await apiClient.get<{ topics: string[] }>("/word-sets/topics");
     return res.data.topics;
+  },
+
+  getSupportedLanguages: async (): Promise<Language[]> => {
+    const res = await apiClient.get<{ languages: Language[] }>("/word-sets/languages");
+    return res.data.languages;
   },
 
   exploreWordSets: async (params: ExploreWordSetsRequest): Promise<ExploreWordSetsResponse> => {

@@ -38,3 +38,9 @@ func (m *metricsClient) GenerateJSON(ctx context.Context, prompt string, schema 
 
 	return err
 }
+
+
+func (m *metricsClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	// Simple implementation
+	return m.inner.GenerateText(ctx, prompt)
+}

@@ -22,6 +22,8 @@ type AIClient interface {
 	// into dst. schema describes the expected JSON structure to the provider
 	// (provider-specific — Gemini uses *genai.Schema, OpenAI uses json-schema).
 	GenerateJSON(ctx context.Context, prompt string, schema any, dst any) error
+	// GenerateText sends prompt to the AI provider and returns the raw string response.
+	GenerateText(ctx context.Context, prompt string) (string, error)
 }
 
 // -----------------------------------------------------------------------

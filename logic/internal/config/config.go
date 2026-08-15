@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -20,36 +21,47 @@ type Config struct {
 	RefreshExpDays int
 
 	// AI
-	GeminiAPIKey    string
-	GroqAPIKey      string
-	OllamaEndpoint  string // e.g. http://localhost:11434
-	OllamaModel     string // e.g. qwen2.5:7b
+	GeminiAPIKey     string
+	GroqAPIKey       string
+	OllamaEndpoint   string
+	OllamaModel      string
 	OpenRouterAPIKey string
 	OpenRouterModel  string
 	HFToken          string
 	HFModel          string
 	AIRateLimit      int // max requests per hour per user
-	AICacheTTLHours int // cache TTL for global AI responses
+	AICacheTTLHours  int // cache TTL for global AI responses
+
+	// Translation Worker
+	TranslationBatchSize    int
+	TranslationWorkerConcur int
+	TranslationMaxRetries   int
+	TranslationPollInterval time.Duration
 
 	// Redis & Cache
-	RedisURI              string
-	CacheTTLDictionaryMin int
-	CacheTTLDashboardMin  int
+	RedisURI               string
+	CacheTTLDictionaryMin  int
+	CacheTTLDashboardMin   int
 	CacheTTLLeaderboardMin int
-	CacheTTLAIDays        int
+	CacheTTLAIDays         int
 }
 
 // Load reads configuration from a .env file (if present) then falls back to OS
 // environment variables. Returns an error if any required variable is missing.
 func Load() (*Config, error) {
 	// .env is optional — production environments typically use real env vars.
-	_ = godotenv.Load()
+	_ = godotenv.Load(".env", "../.env", "../../.env")
 
 	jwtExp, _ := strconv.Atoi(getEnv("JWT_EXPIRATION_MINUTES", "15"))
 	refreshExp, _ := strconv.Atoi(getEnv("REFRESH_TOKEN_EXPIRATION_DAYS", "7"))
 
 	aiRateLimit, _ := strconv.Atoi(getEnv("AI_RATE_LIMIT_PER_HOUR", "20"))
 	aiCacheTTL, _ := strconv.Atoi(getEnv("AI_CACHE_TTL_HOURS", "24"))
+
+	transBatch, _ := strconv.Atoi(getEnv("TRANSLATION_BATCH_SIZE", "10"))
+	transConc, _ := strconv.Atoi(getEnv("TRANSLATION_WORKER_CONCURRENCY", "1"))
+	transRetries, _ := strconv.Atoi(getEnv("TRANSLATION_MAX_RETRIES", "3"))
+	transPoll, _ := strconv.Atoi(getEnv("TRANSLATION_POLL_INTERVAL_SEC", "2"))
 
 	ttlDict, _ := strconv.Atoi(getEnv("CACHE_TTL_DICTIONARY_MINUTES", "1440")) // 24h
 	ttlDash, _ := strconv.Atoi(getEnv("CACHE_TTL_DASHBOARD_MINUTES", "5"))
@@ -75,6 +87,10 @@ func Load() (*Config, error) {
 		HFModel:          getEnv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
 		AIRateLimit:     aiRateLimit,
 		AICacheTTLHours: aiCacheTTL,
+		TranslationBatchSize:    transBatch,
+		TranslationWorkerConcur: transConc,
+		TranslationMaxRetries:   transRetries,
+		TranslationPollInterval: time.Duration(transPoll) * time.Second,
 		RedisURI:        getEnv("REDIS_URI", "redis://localhost:6379/0"),
 		CacheTTLDictionaryMin:  ttlDict,
 		CacheTTLDashboardMin:   ttlDash,

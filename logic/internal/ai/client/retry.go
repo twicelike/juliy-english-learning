@@ -114,3 +114,19 @@ func equalFold(a, b string) bool {
 	}
 	return true
 }
+
+
+func (r *retryClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	var resp string
+	var err error
+	for i := 0; i <= r.maxRetries; i++ {
+		resp, err = r.inner.GenerateText(ctx, prompt)
+		if err == nil {
+			return resp, nil
+		}
+		if i < r.maxRetries {
+			time.Sleep(time.Second * time.Duration(1<<i))
+		}
+	}
+	return resp, err
+}

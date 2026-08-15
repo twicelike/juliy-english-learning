@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"github.com/english/backend/internal/language"
 )
 
 type Handler struct {
@@ -18,6 +19,10 @@ func NewHandler(svc Service) *Handler {
 
 func (h *Handler) GetTopics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"topics": PredefinedTopics})
+}
+
+func (h *Handler) GetSupportedLanguages(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"languages": language.SupportedLanguages})
 }
 
 func (h *Handler) Explore(c *gin.Context) {
@@ -369,3 +374,38 @@ func (h *Handler) RestoreWords(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+
+func (h *Handler) UpdateAnnotation(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := userIDVal.(bson.ObjectID)
+
+	setID, err := bson.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid wordset id"})
+		return
+	}
+
+	wordID, err := bson.ObjectIDFromHex(c.Param("wordId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid word id"})
+		return
+	}
+
+	var req UpdateAnnotationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	annotation, err := h.svc.UpdateAnnotation(c.Request.Context(), userID, setID, wordID, req.Text)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, annotation)
+}

@@ -65,3 +65,26 @@ func (g *GeminiClient) GenerateJSON(ctx context.Context, prompt string, _ any, d
 	}
 	return nil
 }
+
+
+func (g *GeminiClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	model := g.client.GenerativeModel(g.model)
+	// model.ResponseMIMEType = "application/json" // OMITTED for text
+	
+	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		return "", fmt.Errorf("gemini: generate content: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("gemini: empty response")
+	}
+
+	part := resp.Candidates[0].Content.Parts[0]
+	text, ok := part.(genai.Text)
+	if !ok {
+		return "", fmt.Errorf("gemini: unexpected response type")
+	}
+
+	return string(text), nil
+}

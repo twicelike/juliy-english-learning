@@ -23,6 +23,11 @@ export interface SessionItemDTO {
   ipa: string;
   definitions: string[];
   example: string;
+  translation_candidates?: string[];
+  annotation?: {
+    translation: string;
+    note?: string;
+  };
   choices: ChoiceDTO[]; // MCQ
   fill_blank_question: string; // FB
   fill_blank_answer: string; // FB

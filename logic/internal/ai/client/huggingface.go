@@ -124,3 +124,52 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 
 	return nil
 }
+
+
+func (c *HuggingFaceClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	reqBody := hfRequest{
+		Model: c.model,
+		Messages: []hfMsg{
+			{Role: "user", Content: prompt},
+		},
+		Temperature:    0.2, // low temp for deterministic JSON
+		MaxTokens:      2048,
+		Stream:         false,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("huggingface: marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://router.huggingface.co/v1/chat/completions", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("huggingface: create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("huggingface: execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("huggingface: API error %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var hfResp hfResponse
+	if err := json.Unmarshal(respBytes, &hfResp); err != nil {
+		return "", fmt.Errorf("huggingface: decode response: %w", err)
+	}
+
+	if len(hfResp.Choices) == 0 || hfResp.Choices[0].Message.Content == "" {
+		return "", fmt.Errorf("huggingface: empty response, raw: %s", string(respBytes))
+	}
+
+	return hfResp.Choices[0].Message.Content, nil
+}

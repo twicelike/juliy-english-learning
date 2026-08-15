@@ -25,9 +25,10 @@ type service struct {
 	scheduler Scheduler
 	gamiSvc   gamification.Service
 	exSvc     ExerciseContentService
+	enricher  SessionEnricher
 }
 
-func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service, exSvc ExerciseContentService) Service {
+func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service, exSvc ExerciseContentService, enricher SessionEnricher) Service {
 	return &service{
 		repo:      repo,
 		dictRepo:  dictRepo,
@@ -35,6 +36,7 @@ func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.R
 		scheduler: scheduler,
 		gamiSvc:   gamiSvc,
 		exSvc:     exSvc,
+		enricher:  enricher,
 	}
 }
 
@@ -554,6 +556,16 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 		}
 
 		items = append(items, item)
+	}
+
+
+	// Enrich translations and annotations
+	if s.enricher != nil {
+		targetLang := "vi" // Future: read from session or user config
+		enrichedItems, err := s.enricher.EnrichItems(ctx, session.UserID, targetLang, items)
+		if err == nil {
+			items = enrichedItems
+		}
 	}
 
 	return &SessionDTO{

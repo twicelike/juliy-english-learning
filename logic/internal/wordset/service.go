@@ -9,6 +9,8 @@ import (
 	"github.com/english/backend/internal/auth"
 	"github.com/english/backend/internal/dictionary"
 	"github.com/english/backend/internal/learning"
+	"github.com/english/backend/internal/language"
+	"github.com/english/backend/internal/translation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -22,10 +24,11 @@ type service struct {
 	authRepo  auth.Repository
 	dictSvc   dictionary.Service
 	learnRepo learning.Repository
+	transSvc  translation.Service
 }
 
-func NewService(repo Repository, authRepo auth.Repository, dictSvc dictionary.Service, learnRepo learning.Repository) Service {
-	return &service{repo: repo, authRepo: authRepo, dictSvc: dictSvc, learnRepo: learnRepo}
+func NewService(repo Repository, authRepo auth.Repository, dictSvc dictionary.Service, learnRepo learning.Repository, transSvc translation.Service) Service {
+	return &service{repo: repo, authRepo: authRepo, dictSvc: dictSvc, learnRepo: learnRepo, transSvc: transSvc}
 }
 
 func (s *service) checkOwnership(ctx context.Context, userID, setID bson.ObjectID) (*WordSet, error) {
@@ -76,19 +79,34 @@ func (s *service) CreateWordSet(ctx context.Context, userID bson.ObjectID, req C
 		req.Visibility = WordSetVisibilityPrivate
 	}
 
+	if req.SourceLanguage == "" {
+		req.SourceLanguage = "en"
+	}
+	if req.AnnotationLanguage == "" {
+		req.AnnotationLanguage = "vi"
+	}
+	if !language.IsSupported(req.SourceLanguage) {
+		return nil, fmt.Errorf("unsupported source language: %s", req.SourceLanguage)
+	}
+	if !language.IsSupported(req.AnnotationLanguage) {
+		return nil, fmt.Errorf("unsupported annotation language: %s", req.AnnotationLanguage)
+	}
+
 	now := time.Now()
 	set := &WordSet{
-		ID:          bson.NewObjectID(),
-		UserID:      userID,
-		Name:        req.Name,
-		Description: req.Description,
-		Visibility:  req.Visibility,
-		Topics:      req.Topics,
-		Difficulty:  req.Difficulty,
-		WordCount:   0,
-		CloneCount:  0,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                 bson.NewObjectID(),
+		UserID:             userID,
+		Name:               req.Name,
+		Description:        req.Description,
+		Visibility:         req.Visibility,
+		Topics:             req.Topics,
+		Difficulty:         req.Difficulty,
+		SourceLanguage:     req.SourceLanguage,
+		AnnotationLanguage: req.AnnotationLanguage,
+		WordCount:          0,
+		CloneCount:         0,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	err := s.repo.CreateWordSet(ctx, set)
@@ -326,6 +344,18 @@ func (s *service) UpdateWordSet(ctx context.Context, userID, setID bson.ObjectID
 		set.Difficulty = *req.Difficulty
 	}
 
+	if req.AnnotationLanguage != nil {
+		lang := strings.TrimSpace(*req.AnnotationLanguage)
+		if lang == "" {
+			return nil, fmt.Errorf("annotation language cannot be empty")
+		}
+		if !language.IsSupported(lang) {
+			return nil, fmt.Errorf("unsupported annotation language: %s", lang)
+		}
+		update["annotation_language"] = lang
+		set.AnnotationLanguage = lang
+	}
+
 	err = s.repo.UpdateWordSet(ctx, setID, update)
 	if err != nil {
 		return nil, err
@@ -362,7 +392,15 @@ func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.Object
 		CreatedAt:  time.Now(),
 	}
 
-	return s.repo.CreateWordSetItem(ctx, item)
+	err = s.repo.CreateWordSetItem(ctx, item)
+	if err == nil {
+		set, _ := s.repo.GetWordSetByID(ctx, setID)
+		if set != nil && s.transSvc != nil {
+			_ = s.transSvc.EnqueueJobs(ctx, []string{wordID.Hex()}, set.AnnotationLanguage)
+		}
+	}
+	
+	return err
 }
 
 func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID, req BulkAddWordsRequest) (*BulkAddWordsResponse, error) {
@@ -442,6 +480,16 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 			return nil, err
 		}
 		set.WordCount += added
+		
+		// Enqueue translation jobs
+		var wordIDStrs []string
+		for _, id := range uniqueWordIDs {
+			wordIDStrs = append(wordIDStrs, id.Hex())
+		}
+		if len(wordIDStrs) > 0 && s.transSvc != nil {
+			_ = s.transSvc.EnqueueJobs(ctx, wordIDStrs, set.AnnotationLanguage)
+		}
+		
 		return &BulkAddWordsResponse{
 			Added:     added,
 			WordCount: set.WordCount,
@@ -621,7 +669,7 @@ func (s *service) ReorderWords(ctx context.Context, userID, setID bson.ObjectID,
 }
 
 func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.ObjectID) ([]WordViewerItemDTO, error) {
-	_, err := s.checkAccess(ctx, userID, setID)
+	access, err := s.checkAccess(ctx, userID, setID)
 	if err != nil {
 		return nil, err
 	}
@@ -660,6 +708,18 @@ func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.Object
 		dictMap[objID] = &dictWords[i]
 	}
 
+	// WA9: Fetch Translations
+	var translations []translation.WordTranslation
+	if s.transSvc != nil {
+		translations, _ = s.transSvc.GetTranslationsByWordIDs(ctx, wordIDs, access.Set.AnnotationLanguage)
+	}
+	
+	transMap := make(map[string]translation.WordTranslation)
+	for _, tr := range translations {
+		key := fmt.Sprintf("%s:%d", tr.WordID.Hex(), tr.SenseIndex)
+		transMap[key] = tr
+	}
+
 	var viewerItems []WordViewerItemDTO
 	for _, item := range items {
 		dw, ok := dictMap[item.WordID]
@@ -670,12 +730,80 @@ func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.Object
 		key := learning.LearningProgressKey{WordID: item.WordID, SenseIndex: item.SenseIndex}
 		state := learning.DetermineState(progressMap[key])
 		
+		candidates := []string{}
+		transKey := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
+		if tr, ok := transMap[transKey]; ok {
+			candidates = tr.Translations
+		}
+		
 		viewerItems = append(viewerItems, WordViewerItemDTO{
-			WordDTO:       *dw,
-			SenseIndex:    item.SenseIndex,
-			ProgressState: state,
+			WordDTO:               *dw,
+			SenseIndex:            item.SenseIndex,
+			ProgressState:         state,
+			TranslationCandidates: candidates,
+			Annotation:            item.Annotation,
 		})
 	}
 
 	return viewerItems, nil
+}
+
+func (s *service) UpdateAnnotation(ctx context.Context, userID, setID, wordID bson.ObjectID, text string) (*UserAnnotation, error) {
+	set, err := s.checkOwnership(ctx, userID, setID)
+	if err != nil {
+		return nil, err
+	}
+
+	trimmedText := strings.TrimSpace(text)
+	
+	// If text is empty, clear annotation
+	if trimmedText == "" {
+		err := s.repo.UpdateWordSetItemAnnotation(ctx, setID, wordID, nil)
+		return nil, err
+	}
+
+	// Determine Source (ai vs manual)
+	source := "manual"
+	if s.transSvc != nil {
+		translations, err := s.transSvc.GetTranslationsByWordIDs(ctx, []bson.ObjectID{wordID}, set.AnnotationLanguage)
+		if err == nil && len(translations) > 0 {
+			for _, c := range translations[0].Translations {
+				if strings.EqualFold(strings.TrimSpace(c), trimmedText) {
+					source = "ai"
+					trimmedText = c // Use the exact case from AI
+					break
+				}
+			}
+		}
+	}
+
+	annotation := &UserAnnotation{
+		LanguageCode: set.AnnotationLanguage,
+		Text:         trimmedText,
+		Source:       source,
+	}
+
+	err = s.repo.UpdateWordSetItemAnnotation(ctx, setID, wordID, annotation)
+	if err != nil {
+		return nil, err
+	}
+	
+	return annotation, nil
+}
+
+func (s *service) GetAnnotationsByUserAndWordIDs(ctx context.Context, userID bson.ObjectID, wordIDs []bson.ObjectID) (map[bson.ObjectID]*UserAnnotation, error) {
+	items, err := s.repo.GetWordSetsContainingWord(ctx, userID, wordIDs)
+	if err != nil {
+		return nil, err
+	}
+	
+	res := make(map[bson.ObjectID]*UserAnnotation)
+	for _, item := range items {
+		if item.Annotation != nil {
+			// In case a word belongs to multiple sets, we just keep the first one we find or the latest.
+			// Currently just overwrite, which is fine since they usually use the same annotation.
+			res[item.WordID] = item.Annotation
+		}
+	}
+	return res, nil
 }

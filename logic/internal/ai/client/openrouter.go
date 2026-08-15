@@ -108,3 +108,8 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 
 	return nil
 }
+
+
+func (c *OpenRouterClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	return "", fmt.Errorf("GenerateText not implemented for OpenRouterClient")
+}

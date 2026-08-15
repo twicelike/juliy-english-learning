@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -16,7 +17,9 @@ import (
 func Connect(uri string) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	logSlowQuery := func(duration time.Duration, commandName string) {
+	activeCommands := &sync.Map{}
+
+	logSlowQuery := func(duration time.Duration, commandName string, requestID int64) {
 		if duration > 100*time.Millisecond {
 			logger := log.Warn()
 			if duration > 1000*time.Millisecond {
@@ -24,19 +27,28 @@ func Connect(uri string) (*mongo.Client, error) {
 			} else if duration > 300*time.Millisecond {
 				logger = log.Error()
 			}
-			logger.Str("command", commandName).
-				Dur("duration", duration).
-				Msg("Slow MongoDB Query")
+			
+			logEvent := logger.Str("command", commandName).Dur("duration", duration)
+			
+			if cmd, ok := activeCommands.LoadAndDelete(requestID); ok {
+				logEvent = logEvent.Str("query", cmd.(*event.CommandStartedEvent).Command.String())
+			}
+
+			logEvent.Msg("Slow MongoDB Query")
+		} else {
+			activeCommands.Delete(requestID)
 		}
 	}
 
 	monitor := &event.CommandMonitor{
-		Started: func(ctx context.Context, evt *event.CommandStartedEvent) {},
+		Started: func(ctx context.Context, evt *event.CommandStartedEvent) {
+			activeCommands.Store(evt.RequestID, evt)
+		},
 		Succeeded: func(ctx context.Context, evt *event.CommandSucceededEvent) {
-			logSlowQuery(evt.Duration, evt.CommandName)
+			logSlowQuery(evt.Duration, evt.CommandName, evt.RequestID)
 		},
 		Failed: func(ctx context.Context, evt *event.CommandFailedEvent) {
-			logSlowQuery(evt.Duration, evt.CommandName)
+			logSlowQuery(evt.Duration, evt.CommandName, evt.RequestID)
 		},
 	}
 

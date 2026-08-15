@@ -332,3 +332,19 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 
 	return nil
 }
+
+func (r *repository) UpdateWordSetItemAnnotation(ctx context.Context, setID, wordID bson.ObjectID, annotation *UserAnnotation) error {
+	filter := bson.M{
+		"set_id": setID,
+		"word_id": wordID,
+	}
+	var update bson.M
+	if annotation == nil {
+		update = bson.M{"$unset": bson.M{"annotation": ""}}
+	} else {
+		update = bson.M{"$set": bson.M{"annotation": annotation}}
+	}
+
+	_, err := r.db.Collection("word_set_items").UpdateOne(ctx, filter, update)
+	return err
+}
