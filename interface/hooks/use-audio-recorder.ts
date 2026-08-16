@@ -54,6 +54,8 @@ export function useAudioRecorder(options?: UseAudioRecorderOptions) {
     return cleanup;
   }, [cleanup]);
 
+  const updateVolumeRef = useRef<(() => void) | null>(null);
+
   const updateVolume = useCallback(() => {
     if (!analyserRef.current || status !== "recording") return;
 
@@ -72,8 +74,14 @@ export function useAudioRecorder(options?: UseAudioRecorderOptions) {
       options.onVolumeChange(normalizedVolume);
     }
 
-    animationFrameRef.current = requestAnimationFrame(updateVolume);
+    if (updateVolumeRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateVolumeRef.current);
+    }
   }, [status, options]);
+
+  useEffect(() => {
+    updateVolumeRef.current = updateVolume;
+  }, [updateVolume]);
 
   // Start timer interval
   const startTimer = useCallback(() => {

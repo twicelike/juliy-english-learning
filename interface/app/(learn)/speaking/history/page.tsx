@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SpeakingAPI, SpeakingHistoryItem } from "@/lib/speaking-api";
 import Link from "next/link";
-import { ArrowLeft, Clock, Calendar } from "lucide-react";
+import { ArrowLeft, Clock, Calendar, Theater, MessageCircle, Zap, Mic } from "lucide-react";
 
 export default function SpeakingHistoryPage() {
   const router = useRouter();
@@ -22,9 +22,10 @@ export default function SpeakingHistoryPage() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case "scenario": return "🎭";
-      case "free_talk": return "💬";
-      default: return "🎯";
+      case "scenario": return <Theater size={20} className="text-indigo-400" />;
+      case "free_talk": return <MessageCircle size={20} className="text-emerald-400" />;
+      case "quick_practice": return <Zap size={20} className="text-yellow-400" />;
+      default: return <Mic size={20} className="text-indigo-400" />;
     }
   };
 

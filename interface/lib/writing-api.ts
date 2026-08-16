@@ -61,7 +61,7 @@ export const WritingAPI = {
   },
 
   getNewMission: async (topic?: string, difficulty?: string): Promise<MissionDTO> => {
-    const params: any = {};
+    const params: Record<string, string> = {};
     if (topic) params.topic = topic;
     if (difficulty) params.difficulty = difficulty;
     
@@ -70,7 +70,7 @@ export const WritingAPI = {
   },
 
   getReviewMission: async (topic?: string, difficulty?: string): Promise<MissionDTO> => {
-    const params: any = {};
+    const params: Record<string, string> = {};
     if (topic) params.topic = topic;
     if (difficulty) params.difficulty = difficulty;
 

@@ -7,7 +7,7 @@ import { DashboardAPI, UnifiedDashboardResponse } from "@/lib/dashboard-api";
 import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
 import { LazySection } from "@/components/LazySection";
 import { RecommendationAction } from "@/lib/profile-api";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import {
   LineChart,
   Line,
@@ -30,9 +30,9 @@ const ACTION_HREF: Record<RecommendationAction, string> = {
 const ACTION_ICON: Record<RecommendationAction, string> = {
   review: "⟳",
   learn_new: "✦",
-  grammar: "✏️",
-  fill_blank: "🤖",
-  done: "✅",
+  grammar: "✎",
+  fill_blank: "✎",
+  done: "✓",
 };
 
 export default function LearnDashboard() {
@@ -238,15 +238,15 @@ export default function LearnDashboard() {
             <div className="text-lg font-bold text-white">{recommendation.title}</div>
             <div className="text-white/50 text-sm">{recommendation.description}</div>
             {recommendation.ai_message && (
-              <div className="mt-2 text-xs text-indigo-300/70 italic">💬 &quot;{recommendation.ai_message}&quot;</div>
+              <div className="mt-2 text-xs text-indigo-300/70 italic">&quot;{recommendation.ai_message}&quot;</div>
             )}
           </div>
           <div className="text-indigo-400 group-hover:translate-x-1 transition-transform text-xl">→</div>
         </Link>
       )}
 
-      {/* Session launchers */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* ─── Learning Modes Section ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="relative flex flex-col gap-3 p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
           <button 
             onClick={(e) => { e.preventDefault(); setActiveFeatureModal('flashcard'); }}
@@ -254,7 +254,6 @@ export default function LearnDashboard() {
             title="How to use Flashcards"
           >i</button>
           <Link href="/learn/session?mode=new_words" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">🃏</div>
           <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Learn New Words</h2>
           <p className="text-white/50 text-sm relative z-10 pointer-events-none">Unified session: Flashcard → Quiz → Context</p>
           <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start session →</span>
@@ -266,7 +265,6 @@ export default function LearnDashboard() {
             title="How to review words"
           >i</button>
           <Link href="/learn/session?mode=review" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">🧠</div>
           <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Review Due Words</h2>
           <p className="text-white/50 text-sm relative z-10 pointer-events-none">Keep your memory fresh with a unified review session</p>
           <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Start review →</span>
@@ -278,9 +276,8 @@ export default function LearnDashboard() {
             title="How to use Writing Lab"
           >i</button>
           <Link href="/learn/writing" className="absolute inset-0 z-0"></Link>
-          <div className="text-3xl relative z-10 pointer-events-none">✏️</div>
           <h2 className="text-lg font-bold text-white relative z-10 pointer-events-none">Writing Lab</h2>
-          <p className="text-white/50 text-sm relative z-10 pointer-events-none">AI-powered grammar check and vocabulary improvement</p>
+          <p className="text-white/50 text-sm relative z-10 pointer-events-none">Grammar check and vocabulary improvement</p>
           <span className="text-indigo-400 text-sm group-hover:underline relative z-10 pointer-events-none">Open lab →</span>
         </div>
       </div>
@@ -340,7 +337,7 @@ export default function LearnDashboard() {
           <div className="bg-[#1e1e2d] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <span className="text-orange-400">🔥</span> How to gain XP & Level Up
+                How to gain XP & Level Up
               </h3>
               <button 
                 onClick={() => setShowXpInfo(false)}
@@ -385,10 +382,10 @@ export default function LearnDashboard() {
           <div className="bg-[#1e1e2d] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                {activeFeatureModal === 'flashcard' && <><span className="text-xl">🃏</span> Flashcards Guide</>}
-                {activeFeatureModal === 'review' && <><span className="text-xl">🧠</span> Review Guide</>}
-                {activeFeatureModal === 'writing' && <><span className="text-xl">✏️</span> Writing Lab Guide</>}
-                {activeFeatureModal === 'fill-blank' && <><span className="text-xl">🤖</span> AI Fill-in Guide</>}
+                {activeFeatureModal === 'flashcard' && <>Flashcards Guide</>}
+                {activeFeatureModal === 'review' && <>Review Guide</>}
+                {activeFeatureModal === 'writing' && <>Writing Lab Guide</>}
+                {activeFeatureModal === 'fill-blank' && <>Fill-in Guide</>}
               </h3>
               <button 
                 onClick={() => setActiveFeatureModal(null)}
@@ -401,7 +398,7 @@ export default function LearnDashboard() {
             <div className="text-white/70 space-y-4 leading-relaxed text-sm">
               {activeFeatureModal === 'flashcard' && (
                 <>
-                  <p>Flashcards use <strong>Spaced Repetition (SM-2)</strong> to help you memorize words efficiently.</p>
+                  <p>Flashcards use <strong>Spaced Repetition</strong> to help you memorize words efficiently.</p>
                   <ul className="list-disc pl-5 space-y-2">
                     <li>Look at the word and try to recall its meaning.</li>
                     <li>Flip the card to check if you were right.</li>
@@ -422,10 +419,10 @@ export default function LearnDashboard() {
               )}
               {activeFeatureModal === 'writing' && (
                 <>
-                  <p>The Writing Lab is your personal AI English tutor.</p>
+                  <p>The Writing Lab is your dedicated English practice environment.</p>
                   <ul className="list-disc pl-5 space-y-2">
                     <li>Type paragraphs or sentences using your new vocabulary.</li>
-                    <li>The AI will check your grammar, spelling, and sentence structure.</li>
+                    <li>The system will check your grammar, spelling, and sentence structure.</li>
                     <li>You will receive detailed feedback, corrections, and suggestions for more natural phrasing.</li>
                   </ul>
                 </>

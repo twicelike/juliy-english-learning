@@ -82,6 +82,8 @@ type Repository interface {
 	GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDocument, error)
 	// GetDistractors returns N random words with the same POS, excluding the given id.
 	GetDistractors(ctx context.Context, pos string, excludeID bson.ObjectID, n int) ([]WordDocument, error)
+	// GetDistractorsBulk returns N random words with the same POS, excluding the given list of ids.
+	GetDistractorsBulk(ctx context.Context, pos string, excludeIDs []bson.ObjectID, n int) ([]WordDocument, error)
 }
 
 type Service interface {

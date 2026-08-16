@@ -129,7 +129,8 @@ export default function SpeakingSessionRoom() {
       active = false;
       cleanup.then(c => c && c());
     };
-  }, [audioBlob, attemptStatus, sessionId, duration]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioBlob, sessionId, duration]); // Removed attemptStatus to prevent clearing interval when it changes to "processing"
 
   if (isLoading) {
     return (
@@ -263,7 +264,7 @@ export default function SpeakingSessionRoom() {
             {ev.new_used_vocabulary && ev.new_used_vocabulary.length > 0 && (
               <div className="pt-4 border-t border-white/10">
                 <h3 className="text-purple-400 font-bold mb-3 flex items-center gap-2">
-                  ✨ Vocabulary you used!
+                  Vocabulary used
                 </h3>
                 <div className="grid gap-3">
                   {ev.new_used_vocabulary.map((vocab, i) => {
@@ -369,7 +370,7 @@ export default function SpeakingSessionRoom() {
       {/* Task Content */}
       <div className="flex-1 flex flex-col items-center justify-center text-center mb-12">
         <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-6">
-          {isPaused ? "PAUSED" : snapshot.task_type === "free_talk" ? "💬 FREE TALK" : "YOUR TASK"}
+          {isPaused ? "PAUSED" : snapshot.task_type === "free_talk" ? "FREE TALK" : "YOUR TASK"}
         </h2>
         
         <p className="text-2xl sm:text-3xl font-bold text-white leading-relaxed mb-8 max-w-lg mx-auto">
@@ -382,7 +383,7 @@ export default function SpeakingSessionRoom() {
             className="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-full text-white/70 text-sm font-medium transition-colors"
           >
             <HelpCircle size={16} />
-            {showHelp ? "Hide Help" : "💡 Help"}
+            {showHelp ? "Hide Help" : "Help"}
           </button>
         )}
 
@@ -391,7 +392,7 @@ export default function SpeakingSessionRoom() {
             {snapshot.instructions.length > 0 && (
               <div className="mb-6 last:mb-0">
                 <h4 className={`text-sm font-bold uppercase tracking-wider mb-3 ${snapshot.task_type === 'scenario' ? 'text-indigo-400' : 'text-white/60'}`}>
-                  {snapshot.task_type === "scenario" ? "🎯 YOUR GOAL" : "Instructions"}
+                  {snapshot.task_type === "scenario" ? "YOUR GOAL" : "Instructions"}
                 </h4>
                 <ul className="space-y-2">
                   {snapshot.instructions.map((inst, i) => (
@@ -431,7 +432,7 @@ export default function SpeakingSessionRoom() {
           <div className="flex flex-col items-center gap-4 text-indigo-400">
             <Loader2 size={32} className="animate-spin" />
             <p className="font-medium animate-pulse">
-              {attemptStatus === "uploading" ? "Uploading recording..." : "AI is analyzing your speaking..."}
+              {attemptStatus === "uploading" ? "Uploading recording..." : "Analyzing your speech..."}
             </p>
           </div>
         ) : isBeforeRecording ? (

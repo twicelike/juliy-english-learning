@@ -7,10 +7,12 @@ import Footer from "@/components/layout/Footer";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Juliy — AI-powered English Learning",
+  title: "Juliy — English Learning",
   description:
-    "Learn English smarter with AI-powered vocabulary tools, spaced repetition, and personalized tutoring.",
+    "Learn English smarter with modern vocabulary tools, spaced repetition, and personalized practice.",
 };
+
+import { AuthProvider } from "@/features/auth";
 
 export default function RootLayout({
   children,
@@ -20,9 +22,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={geist.variable}>
       <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col" style={{ backgroundColor: "#0a0a12", color: "#ffffff" }}>
-        <Navbar />
-        <main className="flex-1 pt-16">{children}</main>
-        <Footer />
+        <AuthProvider>
+          <Navbar />
+          <main className="flex-1 pt-16">{children}</main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );

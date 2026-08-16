@@ -1,5 +1,5 @@
 import apiClient from "./api-client";
-import { User } from "@/store/auth-store";
+import { User } from "@/features/auth";
 
 export interface BookmarkDTO {
   word: string;
@@ -7,20 +7,6 @@ export interface BookmarkDTO {
 }
 
 export const AuthAPI = {
-  register: async (data: any) => {
-    const res = await apiClient.post("/auth/register", data);
-    return res.data.data;
-  },
-  
-  login: async (data: any) => {
-    const res = await apiClient.post("/auth/login", data);
-    return res.data.data;
-  },
-
-  logout: async () => {
-    await apiClient.post("/auth/logout");
-  },
-
   getProfile: async (): Promise<User> => {
     const res = await apiClient.get("/users/me");
     return res.data.data;

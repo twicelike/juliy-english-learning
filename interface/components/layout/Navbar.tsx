@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 
 export default function Navbar() {
   const { user } = useAuthStore();

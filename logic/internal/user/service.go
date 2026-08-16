@@ -47,9 +47,11 @@ func (s *service) GetProfile(ctx context.Context, userID string) (*auth.UserResp
 	}
 
 	return &auth.UserResponse{
-		ID:    u.ID.Hex(),
-		Email: u.Email,
-		Name:  u.Name,
+		ID:            u.ID.Hex(),
+		Email:         u.Email,
+		DisplayName:   u.DisplayName,
+		AvatarURL:     u.AvatarURL,
+		EmailVerified: u.EmailVerified,
 	}, nil
 }
 

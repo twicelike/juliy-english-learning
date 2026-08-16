@@ -1,64 +1,65 @@
 package middleware
 
 import (
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
-	"strings"
+	"time"
 
+	"github.com/english/backend/internal/auth"
 	"github.com/english/backend/internal/domain"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 const UserIDKey = "user_id"
+const sessionCookieName = "session_id"
 
-func RequireAuth(jwtSecret string) gin.HandlerFunc {
+// RequireAuth checks the session_id cookie and validates it against the database.
+func RequireAuth(repo auth.Repository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authorization header")
+		rawToken, err := c.Cookie(sessionCookieName)
+		if err != nil || rawToken == "" {
+			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing session cookie")
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid authorization header format")
+		// Hash the token
+		hash := sha256.Sum256([]byte(rawToken))
+		tokenHash := hex.EncodeToString(hash[:])
+
+		// Find in DB
+		session, err := repo.GetSessionByHash(c.Request.Context(), tokenHash)
+		if err != nil {
+			domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to validate session")
+			c.Abort()
+			return
+		}
+		if session == nil {
+			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid session")
 			c.Abort()
 			return
 		}
 
-		tokenString := parts[1]
-
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
-			}
-			return []byte(jwtSecret), nil
-		})
-
-		if err != nil || !token.Valid {
-			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired token")
+		// Check revoked
+		if session.RevokedAt != nil {
+			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Session revoked")
 			c.Abort()
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid token claims")
+		// Check expired
+		if session.ExpiresAt.Before(time.Now()) {
+			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Session expired")
 			c.Abort()
 			return
 		}
 
-		sub, ok := claims["sub"].(string)
-		if !ok || sub == "" {
-			domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Missing user ID in token")
-			c.Abort()
-			return
-		}
+		// (Optional) We could update last_used_at here, but doing it on every request
+		// might add unnecessary load to DB. A background job or sampling could be better.
 
 		// Inject user ID into context
-		c.Set(UserIDKey, sub)
+		c.Set(UserIDKey, session.UserID.Hex())
 		c.Next()
 	}
 }

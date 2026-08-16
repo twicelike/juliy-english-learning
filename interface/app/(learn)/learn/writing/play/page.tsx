@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import { WritingAPI, MissionDTO, EvaluationResponseDTO } from "@/lib/writing-api";
 import { UserAPI } from "@/lib/user-api";
 import Link from "next/link";
@@ -160,7 +160,7 @@ function WritingPlayContent() {
              <div className="absolute top-0 left-0 w-24 h-24 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
              <Sparkles className="w-8 h-8 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
           </div>
-          <h2 className="mt-8 text-xl font-medium text-white">AI is evaluating your translation...</h2>
+          <h2 className="mt-8 text-xl font-medium text-white">Evaluating your translation...</h2>
           <p className="text-white/40 mt-2">Checking grammar, vocabulary, and naturalness</p>
         </div>
       )}

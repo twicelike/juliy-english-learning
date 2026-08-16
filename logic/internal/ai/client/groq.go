@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -105,8 +106,69 @@ func (g *GroqClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst
 	return nil
 }
 
+func (g *GroqClient) transcribeAudio(ctx context.Context, audioBytes []byte, _ string) (string, error) {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	// Groq requires a filename. Extension doesn't matter too much but webm/mp4 are standard.
+	fw, err := w.CreateFormFile("file", "audio.webm")
+	if err != nil {
+		return "", err
+	}
+	fw.Write(audioBytes)
+
+	w.WriteField("model", "whisper-large-v3")
+	w.Close()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.groq.com/openai/v1/audio/transcriptions", &b)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+g.apiKey)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	resp, err := g.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("groq audio api error %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var res struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+
+	return res.Text, nil
+}
+
 func (g *GroqClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
-	return fmt.Errorf("groq: multimodal generation not supported")
+	// 1. Speech-to-Text via Whisper
+	transcript, err := g.transcribeAudio(ctx, data, mimeType)
+	if err != nil {
+		return fmt.Errorf("groq multimodal STT failed: %w", err)
+	}
+
+	// 2. Augment prompt
+	augmentedPrompt := prompt + fmt.Sprintf(`
+
+[USER'S AUDIO TRANSCRIPT]
+%s
+
+IMPORTANT: 
+Since you are only evaluating a text transcript and cannot hear the audio, you MUST NOT infer pronunciation quality from transcription errors.
+Set the "pronunciation" score to 0 or neutral, and in the feedback state: "Pronunciation cannot be directly evaluated from transcript-only input."
+For the "transcript" field in the JSON response, use the exact transcript provided above.
+`, transcript)
+
+	// 3. Fallback to standard Text JSON Generation
+	return g.GenerateJSON(ctx, augmentedPrompt, schema, dst)
 }
 
 func (g *GroqClient) GenerateText(ctx context.Context, prompt string) (string, error) {

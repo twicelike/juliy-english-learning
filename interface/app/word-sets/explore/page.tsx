@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { WordSetAPI, WordSetListItem, ExploreWordSetsRequest } from "@/lib/wordset-api";
 import { WordSetCard } from "@/components/wordsets/WordSetCard";
 import Link from "next/link";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import { useRouter } from "next/navigation";
 
 function formatRelativeTime(dateString: string) {

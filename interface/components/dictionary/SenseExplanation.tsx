@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AIAPI, BatchSenseExplanation } from "@/lib/ai-api";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 
 interface SenseExplanationProps {
   wordId: string;
@@ -17,7 +17,7 @@ export default function SenseExplanation({ wordId, senseIndex }: SenseExplanatio
 
   const handleExplain = async () => {
     if (!user) return; // Should be handled by parent, but just in case
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -39,14 +39,14 @@ export default function SenseExplanation({ wordId, senseIndex }: SenseExplanatio
           onClick={handleExplain}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 hover:text-white"
         >
-          <span>✨</span> Explain with AI
+          Explain this meaning
         </button>
       )}
 
       {loading && (
         <div className="flex items-center gap-2 text-indigo-300 text-sm italic">
           <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
-          AI is thinking...
+          Analyzing...
         </div>
       )}
 
@@ -59,10 +59,9 @@ export default function SenseExplanation({ wordId, senseIndex }: SenseExplanatio
       {explanation && (
         <div className="mt-2 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 animate-in fade-in duration-300">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm">🤖</span>
-            <span className="text-indigo-300 text-xs font-medium uppercase tracking-wider">AI Tutor</span>
+            <span className="text-indigo-300 text-xs font-medium uppercase tracking-wider">Explanation</span>
           </div>
-          
+
           <p className="text-white/90 text-sm leading-relaxed mb-3">
             {explanation.explanation}
           </p>

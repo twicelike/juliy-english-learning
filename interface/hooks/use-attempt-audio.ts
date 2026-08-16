@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import apiClient from "@/lib/api-client";
+
+const isServer = typeof window === "undefined";
+const baseURL = isServer
+  ? process.env.NEXT_SERVER_API_URL || "http://127.0.0.1:8080/api/v1"
+  : process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 export function useAttemptAudio(attemptId: string | null) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -17,13 +21,17 @@ export function useAttemptAudio(attemptId: string | null) {
       setError(null);
       
       try {
-        const response = await apiClient.get(`/speaking/attempts/${attemptId}/audio`, {
-          responseType: "blob",
+        const response = await fetch(`${baseURL}/speaking/attempts/${attemptId}/audio`, {
+          credentials: "include",
         });
         
         if (!active) return;
         
-        const blob = response.data;
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
         objectUrl = URL.createObjectURL(blob);
         setAudioUrl(objectUrl);
       } catch (err: any) {

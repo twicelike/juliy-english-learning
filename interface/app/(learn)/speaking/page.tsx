@@ -16,9 +16,7 @@ export default function SpeakingHomePage() {
   const [recentPractices, setRecentPractices] = useState<RecentPracticeItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Note: Streak should ideally come from global state/auth store. 
-  // We're hardcoding for SP1 UI purpose.
-  const streak = 7; 
+
 
   useEffect(() => {
     SpeakingAPI.getRecentPractices()
@@ -44,7 +42,7 @@ export default function SpeakingHomePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 pt-12 pb-24">
-      <SpeakingHeader streak={streak} />
+      <SpeakingHeader />
       
       <RecommendedTask />
       

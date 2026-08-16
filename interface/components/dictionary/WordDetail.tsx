@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { WordDTO } from "@/lib/dictionary-api";
 import { AuthAPI } from "@/lib/auth-api";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import AITutor from "@/components/dictionary/AITutor";
 import SenseExplanation from "@/components/dictionary/SenseExplanation";

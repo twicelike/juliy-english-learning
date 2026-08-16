@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LearningAPI, SessionDTO, SessionItemDTO, WordResult, ProgressQuality } from "@/lib/learning-api";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import { Flashcard } from "@/components/learn/Flashcard";
 import { RatingBar } from "@/components/learn/RatingBar";
 import { SessionProgress } from "@/components/learn/SessionProgress";
@@ -149,9 +149,9 @@ function SessionRunner() {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-6 px-6 text-center">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <h2 className="text-2xl font-bold text-white">AI is preparing your exercises...</h2>
+        <h2 className="text-2xl font-bold text-white">Preparing your exercises...</h2>
         <p className="text-white/50 max-w-sm">
-          We are generating personalized multiple choice and fill-in-the-blank questions for you. This will just take a moment.
+          Generating multiple choice and fill-in-the-blank questions. This will just take a moment.
         </p>
       </div>
     );
@@ -160,8 +160,7 @@ function SessionRunner() {
   if (phase === "error") {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-4 text-center px-6">
-        <div className="text-red-500 text-6xl">⚠️</div>
-        <h2 className="text-2xl font-bold text-white">Oops! Something went wrong.</h2>
+        <h2 className="text-2xl font-bold text-white">Something went wrong</h2>
         <p className="text-white/50">{errorMsg}</p>
         <button onClick={() => router.push("/learn")} className="mt-4 px-6 py-3 rounded-xl bg-indigo-500 text-white hover:bg-indigo-600">
           Back to Dashboard
@@ -173,7 +172,6 @@ function SessionRunner() {
   if (phase === "done") {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-6 text-center px-6">
-        <div className="text-6xl">🎉</div>
         <h1 className="text-3xl font-bold text-white">{doneMsg.title}</h1>
         <p className="text-white/50">{doneMsg.desc}</p>
         <button onClick={() => router.push("/learn")} className="px-6 py-3 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600">

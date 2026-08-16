@@ -1,12 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Flame } from "lucide-react";
 
-interface SpeakingHeaderProps {
-  streak: number;
-}
-
-export function SpeakingHeader({ streak }: SpeakingHeaderProps) {
+export function SpeakingHeader() {
   return (
     <div className="flex justify-between items-start mb-8">
       <div>
@@ -25,12 +21,6 @@ export function SpeakingHeader({ streak }: SpeakingHeaderProps) {
         </p>
       </div>
       <div className="flex items-center gap-4 text-right">
-        {streak > 0 && (
-          <div className="text-right">
-            <div className="text-2xl font-bold text-orange-400">🔥 {streak}</div>
-            <div className="text-xs text-white/40 uppercase tracking-widest">day streak</div>
-          </div>
-        )}
       </div>
     </div>
   );

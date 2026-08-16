@@ -151,7 +151,28 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 		selectedRefs = selectedRefs[:limit]
 	}
 
-	// 5. Build session items
+	// 5. Pre-fetch distractors for Quiz mode
+	var distractorPool map[string][]dictionary.WordDocument
+	if mode == ModeQuiz {
+		posNeeded := make(map[string]int)
+		wordIDs := make([]bson.ObjectID, 0, len(selectedRefs))
+		for _, ref := range selectedRefs {
+			wordIDs = append(wordIDs, ref.WordID)
+			if doc, ok := wordDocByID[ref.WordID]; ok && doc.POS != "" {
+				posNeeded[doc.POS] += 3
+			}
+		}
+
+		distractorPool = make(map[string][]dictionary.WordDocument)
+		for pos, needed := range posNeeded {
+			docs, err := s.dictRepo.GetDistractorsBulk(ctx, pos, wordIDs, needed+3)
+			if err == nil {
+				distractorPool[pos] = docs
+			}
+		}
+	}
+
+	// 6. Build session items
 	items := make([]SessionItemDTO, 0, len(selectedRefs))
 	for _, ref := range selectedRefs {
 		doc, ok := wordDocByID[ref.WordID]
@@ -165,9 +186,8 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 		}
 
 		if mode == ModeQuiz {
-			choices, err := s.buildQuizChoices(ctx, doc, ref.SenseIndex)
+			choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseIndex, distractorPool)
 			if err != nil {
-				// Non-fatal: fall back to flashcard item for this word
 				item.Choices = nil
 			} else {
 				item.Choices = choices
@@ -534,6 +554,26 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 		fbExercises, _ = s.exSvc.GetExercises(ctx, wordIDs, ExerciseFillBlank, 1)
 	}
 
+	// ---------------------------------------------------------
+	// PRE-FETCH DISTRACTORS (N+1 Query Optimization)
+	// ---------------------------------------------------------
+	posNeeded := make(map[string]int)
+	for _, id := range wordIDs {
+		if doc, ok := wordDocByID[id]; ok && doc.POS != "" {
+			posNeeded[doc.POS] += 3
+		}
+	}
+
+	distractorPool := make(map[string][]dictionary.WordDocument)
+	for pos, needed := range posNeeded {
+		// Fetch slightly more to account for possible collisions
+		docs, err := s.dictRepo.GetDistractorsBulk(ctx, pos, wordIDs, needed+3)
+		if err == nil {
+			distractorPool[pos] = docs
+		}
+	}
+	// ---------------------------------------------------------
+
 	items := make([]SessionItemDTO, 0, len(session.Items))
 	for _, ref := range session.Items {
 		id := ref.WordID
@@ -548,7 +588,7 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 		}
 		
 		// Inject MCQ via Database (Fast, no AI tokens)
-		choices, err := s.buildQuizChoices(ctx, doc, ref.SenseIndex)
+		choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseIndex, distractorPool)
 		if err == nil {
 			item.Choices = choices
 		}
@@ -749,7 +789,9 @@ func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItem
 	}, nil
 }
 
-func (s *service) buildQuizChoices(ctx context.Context, doc *dictionary.WordDocument, senseIndex int) ([]ChoiceDTO, error) {
+
+
+func (s *service) buildQuizChoicesFromPool(doc *dictionary.WordDocument, senseIndex int, pool map[string][]dictionary.WordDocument) ([]ChoiceDTO, error) {
 	if senseIndex < 0 || senseIndex >= len(doc.Senses) {
 		return nil, errors.New("invalid sense_index")
 	}
@@ -765,14 +807,19 @@ func (s *service) buildQuizChoices(ctx context.Context, doc *dictionary.WordDocu
 		return nil, errors.New("no definition available")
 	}
 
-	// Distractors: same POS, different word
-	distractors, err := s.dictRepo.GetDistractors(ctx, doc.POS, doc.ID, 3)
-	if err != nil {
-		return nil, err
-	}
-
 	choices := []ChoiceDTO{{Definition: correctDef, IsCorrect: true}}
-	for _, d := range distractors {
+
+	// Get from pool
+	available := pool[doc.POS]
+	used := 0
+	var remaining []dictionary.WordDocument
+
+	for _, d := range available {
+		if used >= 3 {
+			remaining = append(remaining, d)
+			continue
+		}
+		
 		def := ""
 		for _, sense := range d.Senses {
 			if len(sense.Glosses) > 0 {
@@ -782,8 +829,11 @@ func (s *service) buildQuizChoices(ctx context.Context, doc *dictionary.WordDocu
 		}
 		if def != "" {
 			choices = append(choices, ChoiceDTO{Definition: def, IsCorrect: false})
+			used++
 		}
 	}
+	
+	pool[doc.POS] = remaining
 
 	// Shuffle choices so correct answer isn't always first
 	rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })

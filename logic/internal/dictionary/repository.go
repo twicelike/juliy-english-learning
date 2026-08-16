@@ -219,3 +219,34 @@ func (r *repository) GetDistractors(ctx context.Context, pos string, excludeID b
 	return docs, nil
 }
 
+// GetDistractorsBulk returns n random words with the same POS, excluding the given excludeIDs.
+func (r *repository) GetDistractorsBulk(ctx context.Context, pos string, excludeIDs []bson.ObjectID, n int) ([]WordDocument, error) {
+	if len(excludeIDs) == 0 {
+		excludeIDs = []bson.ObjectID{bson.NewObjectID()}
+	}
+	
+	filter := bson.D{
+		{Key: "pos", Value: pos},
+		{Key: "_id", Value: bson.M{"$nin": excludeIDs}},
+		{Key: "senses.0.glosses.0", Value: bson.M{"$exists": true}},
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$sample", Value: bson.D{{Key: "size", Value: n}}}},
+		{{Key: "$project", Value: bson.D{
+			{Key: "word", Value: 1},
+			{Key: "pos", Value: 1},
+			{Key: "senses", Value: bson.D{{Key: "$slice", Value: bson.A{"$senses", 1}}}},
+		}}},
+	}
+	cursor, err := r.coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var docs []WordDocument
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}

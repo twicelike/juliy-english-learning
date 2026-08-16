@@ -2,7 +2,10 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"bytes"
 
 	"github.com/english/backend/internal/ai"
 	aiclient "github.com/english/backend/internal/ai/client"
@@ -14,6 +17,7 @@ import (
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/handler"
 	"github.com/english/backend/internal/learning"
+	"github.com/english/backend/internal/mail"
 	"github.com/english/backend/internal/middleware"
 	"github.com/english/backend/internal/profile"
 	"github.com/english/backend/internal/speaking"
@@ -109,15 +113,59 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		authRepo := auth.NewRepository(mongoClient.Database(cfg.MongoDB))
 		// We must ensure indexes
 		_ = authRepo.EnsureIndexes(ctx)
-		authService := auth.NewService(authRepo, cfg.JWTSecret, cfg.JWTExpMinutes, cfg.RefreshExpDays)
-		authHandler := auth.NewHandler(authService, cfg.Env, cfg.RefreshExpDays)
+		mailerService := mail.NewSMTPMailer(cfg)
+		authService := auth.NewService(authRepo, mailerService, cfg.RefreshExpDays, cfg.FrontendURL)
+		oauthService := auth.NewGoogleOAuthService(cfg)
+		authHandler := auth.NewHandler(authService, oauthService, cfg.Env, cfg.RefreshExpDays, cfg.FrontendURL)
+
+		// Auth Extractors for Rate Limiting
+		extractEmailFromJSON := func(c *gin.Context) string {
+			ip := c.ClientIP()
+			
+			// Try to read email from JSON body without breaking later bindings
+			var email string
+			if c.Request.Body != nil {
+				bodyBytes, err := io.ReadAll(c.Request.Body)
+				if err == nil && len(bodyBytes) > 0 {
+					// Restore the body for next handlers
+					c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					
+					var payload struct {
+						Email string `json:"email"`
+					}
+					if err := json.Unmarshal(bodyBytes, &payload); err == nil && payload.Email != "" {
+						email = payload.Email
+					}
+				}
+			}
+
+			if email != "" {
+				return ip + ":" + email
+			}
+			return ip
+		}
 
 		authRoutes := v1.Group("/auth")
 		{
-			authRoutes.POST("/register", authHandler.Register)
-			authRoutes.POST("/login", authHandler.Login)
-			authRoutes.POST("/refresh", authHandler.Refresh)
+			authRoutes.POST("/register", middleware.IPRateLimiter(5), authHandler.Register)
+			authRoutes.POST("/login", middleware.KeyRateLimiter(5, extractEmailFromJSON), authHandler.Login)
 			authRoutes.POST("/logout", authHandler.Logout)
+			authRoutes.GET("/google", authHandler.GoogleLogin)
+			authRoutes.GET("/google/callback", authHandler.GoogleCallback)
+
+			authRoutes.POST("/verify-email", authHandler.VerifyEmail)
+			authRoutes.POST("/resend-verification", middleware.KeyRateLimiter(3, extractEmailFromJSON), authHandler.ResendVerification)
+			authRoutes.POST("/forgot-password", middleware.KeyRateLimiter(3, extractEmailFromJSON), authHandler.ForgotPassword)
+			authRoutes.POST("/reset-password", authHandler.ResetPassword)
+			
+			authProtected := authRoutes.Group("")
+			authProtected.Use(middleware.RequireAuth(authRepo))
+			{
+				authProtected.GET("/me", authHandler.GetMe)
+				authProtected.POST("/logout-all", authHandler.LogoutAll)
+				authProtected.GET("/sessions", authHandler.GetSessions)
+				authProtected.DELETE("/sessions/:id", authHandler.RevokeSession)
+			}
 		}
 
 		// User
@@ -127,7 +175,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		userHandler := user.NewHandler(userService)
 
 		userRoutes := v1.Group("/users")
-		userRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		userRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			userRoutes.GET("/me", userHandler.GetProfile)
 			userRoutes.GET("/bookmarks", userHandler.ListBookmarks)
@@ -154,7 +202,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		wordSetHandler := wordset.NewHandler(wordSetService)
 
 		wordSetRoutes := v1.Group("/word-sets")
-		wordSetRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		wordSetRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			wordSetRoutes.POST("", wordSetHandler.Create)
 			wordSetRoutes.GET("", wordSetHandler.List)
@@ -182,7 +230,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			aiRepo := ai.NewRepository(mongoClient.Database(cfg.MongoDB))
 			aiService := ai.NewService(aiClientWrapped, aiCache, aiRepo, dictRepo, aiLimiter)
 			aiHandler := ai.NewHandler(aiService, aiLimiter)
-			ai.RegisterRoutes(v1, aiHandler, cfg.JWTSecret)
+			ai.RegisterRoutes(v1, aiHandler, authRepo)
 
 			// Speaking Domain
 			speakingRepo := speaking.NewRepository(mongoClient.Database(cfg.MongoDB))
@@ -195,7 +243,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			recService := speaking.NewRecommendationService(speakingRepo, speakingService)
 			speakingHandler := speaking.NewHandler(speakingService, recService)
 			speakingRoutes := v1.Group("")
-			speakingRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+			speakingRoutes.Use(middleware.RequireAuth(authRepo))
 			speakingHandler.RegisterRoutes(speakingRoutes)
 		}
 
@@ -215,7 +263,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		learnHandler := learning.NewHandler(learnService)
 
 		learnRoutes := v1.Group("/learning")
-		learnRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		learnRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			learnRoutes.GET("/dashboard", learnHandler.GetDashboard)
 			learnRoutes.GET("/session", learnHandler.GetSession)
@@ -241,7 +289,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		writingHandler := writing.NewHandler(writingService)
 
 		writingRoutes := v1.Group("/writing")
-		writingRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		writingRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			writingRoutes.GET("/dashboard", writingHandler.GetDashboardStats)
 			
@@ -260,7 +308,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		profileHandler := profile.NewHandler(profileService)
 
 		profileRoutes := v1.Group("/profile")
-		profileRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		profileRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			profileRoutes.GET("", profileHandler.GetDashboard)
 			profileRoutes.GET("/placement-test", profileHandler.GetPlacementTest)
@@ -270,14 +318,14 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		// Gamification Routes
 		gamiHandler := gamification.NewHandler(gamiService)
 		gamiRoutes := v1.Group("/gamification")
-		gamiRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		gamiRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			gamiRoutes.GET("/chart", gamiHandler.GetChart)
 		}
 
 		// Unified Dashboard Routes
 		dashRoutes := v1.Group("/dashboard")
-		dashRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+		dashRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			dashRoutes.GET("", profileHandler.GetDashboard)
 		}

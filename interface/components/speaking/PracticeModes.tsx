@@ -71,7 +71,7 @@ export function PracticeModes({ onStart, loadingMode }: PracticeModesProps) {
         <PracticeModeCard
           type="free_talk"
           title="Free Talk"
-          description="Talk freely with AI about anything."
+          description="Practice conversation freely on any topic."
           icon={<MessageCircle size={24} className="text-emerald-400" />}
           gradient="from-emerald-400 to-teal-500"
           onStart={onStart}

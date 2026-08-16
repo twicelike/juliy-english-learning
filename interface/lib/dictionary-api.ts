@@ -36,7 +36,8 @@ export const DictionaryAPI = {
     try {
       const res = await apiClient.get<ApiResponse<WordDTO>>(`/words/detail/${encodeURIComponent(word)}`);
       return res.data.data;
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any;
       if (err.message === "Word not found" || err.response?.status === 404) {
         return null; // Handle not found gracefully
       }

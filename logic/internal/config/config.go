@@ -20,6 +20,18 @@ type Config struct {
 	JWTExpMinutes  int
 	RefreshExpDays int
 
+	// OAuth
+	GoogleClientID    string
+	GoogleClientSecret string
+	GoogleCallbackURL string
+	FrontendURL       string
+
+	// SMTP Mailer
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+
 	// AI
 	GeminiAPIKey     string
 	GroqAPIKey       string
@@ -68,6 +80,8 @@ func Load() (*Config, error) {
 	ttlLead, _ := strconv.Atoi(getEnv("CACHE_TTL_LEADERBOARD_MINUTES", "2"))
 	ttlAI, _ := strconv.Atoi(getEnv("CACHE_TTL_AI_DAYS", "7"))
 
+	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
+
 	cfg := &Config{
 		Port:            getEnv("PORT", "8080"),
 		MongoURI:        getEnv("MONGO_URI", ""),
@@ -77,6 +91,14 @@ func Load() (*Config, error) {
 		JWTSecret:       getEnv("JWT_SECRET", "super-secret-jwt-key-replace-me-in-prod"),
 		JWTExpMinutes:   jwtExp,
 		RefreshExpDays:  refreshExp,
+		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleCallbackURL: getEnv("GOOGLE_CALLBACK_URL", "http://localhost:3000/api/v1/auth/google/callback"),
+		FrontendURL:     getEnv("FRONTEND_URL", "http://localhost:3000"),
+		SMTPHost:        getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:        smtpPort,
+		SMTPUser:        getEnv("SMTP_USER", ""),
+		SMTPPassword:    getEnv("SMTP_PASSWORD", ""),
 		GeminiAPIKey:    getEnv("GEMINI_API_KEY", ""),
 		GroqAPIKey:      getEnv("GROQ_API_KEY", ""),
 		OllamaEndpoint:  getEnv("OLLAMA_ENDPOINT", ""),

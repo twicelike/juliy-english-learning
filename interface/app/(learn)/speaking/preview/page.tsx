@@ -131,7 +131,7 @@ function SpeakingPreviewContent() {
         {((task.hints && task.hints.length > 0) || (task.suggested_vocabulary && task.suggested_vocabulary.length > 0)) && (
           <div className="pt-6 border-t border-white/10">
             <h3 className="text-sm font-bold text-yellow-400 mb-4 flex items-center gap-2">
-              💡 Helpful hints & words
+              Helpful hints & words
             </h3>
             
             {task.hints && task.hints.length > 0 && (

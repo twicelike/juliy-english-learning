@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/auth-store";
+import { useAuthStore } from "@/features/auth";
 import { WritingAPI, DashboardStatsDTO } from "@/lib/writing-api";
 import Link from "next/link";
 import { BookOpen, Target, BrainCircuit, PenTool, ArrowRight, X } from "lucide-react";
@@ -58,7 +58,7 @@ export default function WritingDashboardPage() {
     <div className="min-h-[calc(100vh-4rem)] p-6 max-w-5xl mx-auto">
       <div className="mb-10 text-center space-y-4">
         <h1 className="text-4xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-emerald-400">
-          AI Writing Missions
+          Writing Missions
         </h1>
         <p className="text-white/60 text-lg max-w-2xl mx-auto">
           Translate real-world scenarios from Vietnamese to English. Get instant feedback on grammar, vocabulary, and naturalness.

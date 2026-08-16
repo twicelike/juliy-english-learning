@@ -1,18 +1,18 @@
 package ai
 
 import (
+	"github.com/english/backend/internal/auth"
 	"github.com/english/backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
 // RegisterRoutes mounts AI Tutor routes onto the provided router group.
-// All routes require authentication and are subject to rate limiting enforced
-// inside each handler.
-func RegisterRoutes(rg *gin.RouterGroup, h *Handler, jwtSecret string) {
-	ai := rg.Group("/ai")
-	ai.Use(middleware.RequireAuth(jwtSecret))
+// It applies the authentication middleware so that only logged-in users can use the AI.
+func RegisterRoutes(rg *gin.RouterGroup, h *Handler, authRepo auth.Repository) {
+	aiGroup := rg.Group("/ai")
+	aiGroup.Use(middleware.RequireAuth(authRepo))
 	{
-		words := ai.Group("/words")
+		words := aiGroup.Group("/words")
 		{
 			words.POST("/explain-sense", h.ExplainSense)
 			words.POST("/nuance", h.ExplainNuance)
@@ -21,13 +21,13 @@ func RegisterRoutes(rg *gin.RouterGroup, h *Handler, jwtSecret string) {
 
 		}
 
-		writing := ai.Group("/writing")
+		writing := aiGroup.Group("/writing")
 		{
 			writing.POST("/check", h.CheckGrammar)
 			writing.POST("/vocab", h.SuggestWritingVocab)
 		}
 
-		quiz := ai.Group("/quiz")
+		quiz := aiGroup.Group("/quiz")
 		{
 			quiz.POST("/fill-blank", h.GenerateFillBlank)
 		}

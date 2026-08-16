@@ -121,7 +121,7 @@ export function Flashcard({ card, flipped, onFlip }: FlashcardProps) {
               ) : card.translation_candidates && card.translation_candidates.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   <div className="w-full flex items-center gap-2 mb-1 text-white/50 text-xs">
-                    <span>AI Candidates</span>
+                    <span>Translations</span>
                   </div>
                   {card.translation_candidates.map((t, idx) => (
                     <div key={idx} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 text-sm">
