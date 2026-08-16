@@ -2,6 +2,7 @@ package gamification
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -201,5 +202,56 @@ func TestTrackActivity_DailyGoalBonus(t *testing.T) {
 	expectedXP += ActivityReview.XP() // only normal review XP
 	if repo.Stats.TotalXP != expectedXP {
 		t.Errorf("expected XP %d after exceeding goal, got %d", expectedXP, repo.Stats.TotalXP)
+	}
+}
+
+func TestTrackSpeakingSession(t *testing.T) {
+	repo := &MockRepository{
+		ProgressMap: make(map[string]*DailyProgress),
+	}
+	svc := NewService(repo)
+	ctx := context.Background()
+	userID := bson.NewObjectID().Hex()
+	today := time.Now().Format("2006-01-02")
+
+	tests := []struct {
+		score      int
+		expectedXP int
+	}{
+		{score: 20, expectedXP: 4},
+		{score: 50, expectedXP: 10},
+		{score: 80, expectedXP: 16},
+		{score: 100, expectedXP: 20},
+		{score: 0, expectedXP: 1}, // Minimum XP is 1
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("Score_%d", tt.score), func(t *testing.T) {
+			repo.ProgressMap = make(map[string]*DailyProgress) // Reset state
+			repo.Stats = nil
+
+			err := svc.TrackSpeakingSession(ctx, userID, tt.score)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			dp, exists := repo.ProgressMap[today]
+			if !exists {
+				t.Fatal("DailyProgress not created")
+			}
+			if dp.SpeakingTasksCompleted != 1 {
+				t.Errorf("Expected 1 speaking task, got %d", dp.SpeakingTasksCompleted)
+			}
+			if dp.XP != tt.expectedXP {
+				t.Errorf("Expected %d XP in DP, got %d", tt.expectedXP, dp.XP)
+			}
+
+			if repo.Stats == nil {
+				t.Fatal("UserStats not created")
+			}
+			if repo.Stats.TotalXP != tt.expectedXP {
+				t.Errorf("Expected %d total XP, got %d", tt.expectedXP, repo.Stats.TotalXP)
+			}
+		})
 	}
 }

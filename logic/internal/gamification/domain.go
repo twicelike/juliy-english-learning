@@ -51,6 +51,7 @@ type DailyProgress struct {
 	NewWordsLearned          int           `bson:"new_words_learned"`
 	StudyMinutes             int           `bson:"study_minutes"`
 	WritingMissionsCompleted int           `bson:"writing_missions_completed"`
+	SpeakingTasksCompleted   int           `bson:"speaking_tasks_completed"`
 	DailyGoalReached         bool          `bson:"daily_goal_reached"`
 	CreatedAt        time.Time     `bson:"created_at"`
 	UpdatedAt        time.Time     `bson:"updated_at"`
@@ -99,10 +100,11 @@ var Achievements = []AchievementDef{
 
 // ChartDataPoint represents one bar/point on the chart.
 type ChartDataPoint struct {
-	Date   string `json:"date"`
-	XP     int    `json:"xp"`
-	Words  int    `json:"words"`
-	Active bool   `json:"active"`
+	Date       string `json:"date"`
+	XP         int    `json:"xp"`
+	Activities int    `json:"activities"`
+	Words      int    `json:"words"` // Kept for backward compatibility
+	Active     bool   `json:"active"`
 }
 
 
@@ -136,6 +138,7 @@ type Service interface {
 	// Facade method for tracking all user actions
 	TrackActivity(ctx context.Context, userID string, activity ActivityType, isCorrect bool, dailyGoal int) error
 	TrackWritingMission(ctx context.Context, userID string, score int) error
+	TrackSpeakingSession(ctx context.Context, userID string, score int) error
 	
 	GetStatsAndProgress(ctx context.Context, userID string) (*UserStats, *DailyProgress, []AchievementDef, error)
 	GetChartData(ctx context.Context, userID string, periodDays int) ([]ChartDataPoint, error)

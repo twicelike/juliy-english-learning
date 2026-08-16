@@ -16,6 +16,8 @@ import (
 	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/middleware"
 	"github.com/english/backend/internal/profile"
+	"github.com/english/backend/internal/speaking"
+	"github.com/english/backend/internal/storage"
 	"github.com/english/backend/internal/translation"
 	"github.com/english/backend/internal/user"
 	"github.com/english/backend/internal/wordset"
@@ -72,7 +74,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		} else if cfg.OllamaEndpoint != "" {
 			rawAI, errAI = aiclient.NewOllamaClient(cfg.OllamaEndpoint, cfg.OllamaModel)
 		} else if cfg.GeminiAPIKey != "" {
-			rawAI, errAI = aiclient.NewGeminiClient(context.Background(), cfg.GeminiAPIKey, "gemini-2.0-flash")
+			rawAI, errAI = aiclient.NewGeminiClient(context.Background(), cfg.GeminiAPIKey, "gemini-3.5-flash")
 		}
 
 		var translationService translation.Service
@@ -180,6 +182,20 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			aiService := ai.NewService(aiClientWrapped, aiCache, dictRepo, aiLimiter)
 			aiHandler := ai.NewHandler(aiService, aiLimiter)
 			ai.RegisterRoutes(v1, aiHandler, cfg.JWTSecret)
+
+			// Speaking Domain
+			speakingRepo := speaking.NewRepository(mongoClient.Database(cfg.MongoDB))
+			storageSvc, err := storage.NewLocalStorage("uploads")
+			if err != nil {
+				panic(fmt.Errorf("failed to initialize local storage: %w", err))
+			}
+			processorSvc := speaking.NewProcessingService(speakingRepo, aiService, storageSvc, dictRepo, gamiService)
+			speakingService := speaking.NewService(speakingRepo, aiService, storageSvc, processorSvc)
+			recService := speaking.NewRecommendationService(speakingRepo, speakingService)
+			speakingHandler := speaking.NewHandler(speakingService, recService)
+			speakingRoutes := v1.Group("")
+			speakingRoutes.Use(middleware.RequireAuth(cfg.JWTSecret))
+			speakingHandler.RegisterRoutes(speakingRoutes)
 		}
 
 		// Learning

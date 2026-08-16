@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -225,4 +226,43 @@ func toPromptCtx(p PromptContext) prompts.PromptContext {
 		UserLevel:      p.UserLevel,
 		NativeLanguage: p.NativeLanguage,
 	}
+}
+
+// -----------------------------------------------------------------------
+// Speaking features
+// -----------------------------------------------------------------------
+
+func (s *service) GenerateSpeakingTask(ctx context.Context, topic, taskType, difficulty string) (*dto.SpeakingTaskResponse, error) {
+	prompt := prompts.BuildSpeakingTaskPrompt(topic, taskType, difficulty)
+	var resp dto.SpeakingTaskResponse
+	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
+		return nil, fmt.Errorf("ai: generate speaking task: %w", err)
+	}
+	if err := resp.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidAIResponse, err)
+	}
+
+	// Business validation
+	if taskType == "scenario" && resp.Scenario == "" {
+		return nil, fmt.Errorf("%w: scenario is required for scenario task type", ErrInvalidAIResponse)
+	}
+
+	return &resp, nil
+}
+
+func (s *service) EvaluateSpeaking(ctx context.Context, audioBytes []byte, mimeType string, taskSnapshot any) (*dto.SpeakingEvaluationResponse, error) {
+	snapshotBytes, err := json.Marshal(taskSnapshot)
+	if err != nil {
+		return nil, fmt.Errorf("ai: failed to marshal task snapshot: %w", err)
+	}
+
+	prompt := prompts.BuildSpeakingEvaluationPrompt(string(snapshotBytes))
+	var resp dto.SpeakingEvaluationResponse
+
+	err = s.client.GenerateMultimodalJSON(ctx, prompt, mimeType, audioBytes, nil, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("ai: evaluate speaking: %w", err)
+	}
+
+	return &resp, nil
 }

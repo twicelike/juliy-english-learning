@@ -319,8 +319,8 @@ export default function LearnDashboard() {
                 />
                 <Line 
                   type="monotone" 
-                  dataKey="xp_gained" 
-                  name="XP Earned" 
+                  dataKey="activities" 
+                  name="Activities"
                   stroke="#818cf8" 
                   strokeWidth={3}
                   dot={{ fill: '#818cf8', r: 4, strokeWidth: 0 }}

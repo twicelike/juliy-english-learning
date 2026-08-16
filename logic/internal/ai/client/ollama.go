@@ -110,6 +110,10 @@ func (o *OllamaClient) GenerateJSON(ctx context.Context, prompt string, _ any, d
 	return nil
 }
 
+func (o *OllamaClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	return fmt.Errorf("ollama: multimodal generation not supported")
+}
+
 
 func (o *OllamaClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	return "", fmt.Errorf("GenerateText not implemented for OllamaClient")

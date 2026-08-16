@@ -39,6 +39,26 @@ func (m *metricsClient) GenerateJSON(ctx context.Context, prompt string, schema 
 	return err
 }
 
+func (m *metricsClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	start := time.Now()
+
+	err := m.inner.GenerateMultimodalJSON(ctx, prompt, mimeType, data, schema, dst)
+
+	latency := time.Since(start)
+	if err != nil {
+		slog.Error("AI multimodal request failed",
+			"latency_ms", latency.Milliseconds(),
+			"error", err,
+		)
+	} else {
+		slog.Info("AI multimodal request completed",
+			"latency_ms", latency.Milliseconds(),
+		)
+	}
+
+	return err
+}
+
 
 func (m *metricsClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	// Simple implementation

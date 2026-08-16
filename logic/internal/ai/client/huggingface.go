@@ -117,14 +117,16 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 		return fmt.Errorf("huggingface: empty response, raw: %s", string(respBytes))
 	}
 
-	rawJSON := cleanJSON(hfResp.Choices[0].Message.Content)
-	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
-		return fmt.Errorf("huggingface: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
+	raw := cleanJSON(hfResp.Choices[0].Message.Content)
+	if err := json.Unmarshal([]byte(raw), dst); err != nil {
+		return fmt.Errorf("huggingface: unmarshal response: %w (raw: %.200s)", err, raw)
 	}
-
 	return nil
 }
 
+func (h *HuggingFaceClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	return fmt.Errorf("huggingface: multimodal generation not supported")
+}
 
 func (c *HuggingFaceClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	reqBody := hfRequest{

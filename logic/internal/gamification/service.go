@@ -229,6 +229,77 @@ func (s *service) TrackWritingMission(ctx context.Context, userID string, score 
 	return nil
 }
 
+// TrackSpeakingSession tracks a completed speaking session, awarding XP based on score.
+func (s *service) TrackSpeakingSession(ctx context.Context, userID string, score int) error {
+	oid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id: %w", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	xpGained := score / 5
+	if xpGained < 1 {
+		xpGained = 1
+	}
+
+	// 1. Update Daily Progress
+	dp, err := s.repo.GetDailyProgress(ctx, oid, today)
+	if err != nil {
+		return err
+	}
+	if dp == nil {
+		dp = &DailyProgress{
+			ID:        bson.NewObjectID(),
+			UserID:    oid,
+			Date:      today,
+			CreatedAt: time.Now(),
+		}
+	}
+	dp.SpeakingTasksCompleted++
+	dp.XP += xpGained
+	dp.UpdatedAt = time.Now()
+	if err := s.repo.UpsertDailyProgress(ctx, dp); err != nil {
+		return err
+	}
+
+	// 2. Update User Stats & Streak
+	stats, err := s.repo.GetUserStats(ctx, oid)
+	if err != nil {
+		return err
+	}
+	if stats == nil {
+		stats = &UserStats{
+			ID:        bson.NewObjectID(),
+			UserID:    oid,
+			CreatedAt: time.Now(),
+		}
+	}
+
+	stats.TotalXP += xpGained
+	stats.Level, _, _ = CalculateLevel(stats.TotalXP)
+
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	if stats.LastActivityDate == yesterday {
+		stats.CurrentStreak++
+	} else if stats.LastActivityDate != today {
+		stats.CurrentStreak = 1
+	}
+	if stats.CurrentStreak > stats.LongestStreak {
+		stats.LongestStreak = stats.CurrentStreak
+	}
+	stats.LastActivityDate = today
+	stats.UpdatedAt = time.Now()
+
+	if err := s.repo.UpsertUserStats(ctx, stats); err != nil {
+		return err
+	}
+
+	// 3. Check Achievements (general check)
+	s.checkAchievements(ctx, oid, stats, dp)
+
+	return nil
+}
+
 func (s *service) unlockAchievementIfMissing(ctx context.Context, userID bson.ObjectID, achievementID string) {
 	has, _ := s.repo.HasAchievement(ctx, userID, achievementID)
 	if !has {
@@ -313,18 +384,21 @@ func (s *service) GetChartData(ctx context.Context, userID string, periodDays in
 
 		dp, exists := histMap[dateStr]
 		if exists {
+			activitiesCount := dp.ReviewsCompleted + dp.NewWordsLearned + dp.SpeakingTasksCompleted + dp.WritingMissionsCompleted
 			chart = append(chart, ChartDataPoint{
-				Date:   dateStr, // could format to "Mon" or "02/01" for UI
-				XP:     dp.XP,
-				Words:  dp.ReviewsCompleted + dp.NewWordsLearned,
-				Active: true,
+				Date:       dateStr, // could format to "Mon" or "02/01" for UI
+				XP:         dp.XP,
+				Activities: activitiesCount,
+				Words:      activitiesCount, // Keep backward compatibility
+				Active:     true,
 			})
 		} else {
 			chart = append(chart, ChartDataPoint{
-				Date:   dateStr,
-				XP:     0,
-				Words:  0,
-				Active: false,
+				Date:       dateStr,
+				XP:         0,
+				Activities: 0,
+				Words:      0,
+				Active:     false,
 			})
 		}
 	}

@@ -105,6 +105,9 @@ func (g *GroqClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst
 	return nil
 }
 
+func (g *GroqClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	return fmt.Errorf("groq: multimodal generation not supported")
+}
 
 func (g *GroqClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	reqBody := groqRequest{

@@ -131,6 +131,7 @@ func (r *repository) GetWords(ctx context.Context, word string) ([]WordDocument,
 
 func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: "pos", Value: bson.M{"$ne": "name"}}}}},
 		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 1}}}},
 	}
 	cursor, err := r.coll.Aggregate(ctx, pipeline)
@@ -150,8 +151,10 @@ func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 }
 
 func (r *repository) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDocument, error) {
+	filter := bson.M{"pos": bson.M{"$ne": "name"}}
+	
 	// 1. Get total count of words
-	count, err := r.coll.CountDocuments(ctx, bson.M{})
+	count, err := r.coll.CountDocuments(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +175,7 @@ func (r *repository) GetWordOfTheDay(ctx context.Context, dateStr string) (*Word
 	// 4. Find with skip
 	opts := options.FindOne().SetSkip(offset)
 	var doc WordDocument
-	err = r.coll.FindOne(ctx, bson.M{}, opts).Decode(&doc)
+	err = r.coll.FindOne(ctx, filter, opts).Decode(&doc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, nil

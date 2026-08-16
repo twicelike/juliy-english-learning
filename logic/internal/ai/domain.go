@@ -22,6 +22,8 @@ type AIClient interface {
 	// into dst. schema describes the expected JSON structure to the provider
 	// (provider-specific — Gemini uses *genai.Schema, OpenAI uses json-schema).
 	GenerateJSON(ctx context.Context, prompt string, schema any, dst any) error
+	// GenerateMultimodalJSON sends prompt and a file blob to the AI provider.
+	GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error
 	// GenerateText sends prompt to the AI provider and returns the raw string response.
 	GenerateText(ctx context.Context, prompt string) (string, error)
 }
@@ -76,6 +78,10 @@ type AITutorService interface {
 
 	// Quiz features
 	GenerateFillBlank(ctx context.Context, promptCtx PromptContext, words []dictionary.WordDocument) (*dto.FillBlankResponse, error)
+
+	// Speaking features
+	GenerateSpeakingTask(ctx context.Context, topic, taskType, difficulty string) (*dto.SpeakingTaskResponse, error)
+	EvaluateSpeaking(ctx context.Context, audioBytes []byte, mimeType string, taskSnapshot any) (*dto.SpeakingEvaluationResponse, error)
 }
 
 // -----------------------------------------------------------------------

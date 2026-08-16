@@ -19,7 +19,7 @@ type GeminiClient struct {
 // model is the model name (e.g. "gemini-2.0-flash").
 func NewGeminiClient(ctx context.Context, apiKey, model string) (*GeminiClient, error) {
 	if model == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-3.5-flash"
 	}
 	c, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -34,13 +34,8 @@ func (g *GeminiClient) Close() {
 }
 
 // GenerateJSON sends prompt to Gemini and unmarshals the JSON response into dst.
-// schema is currently unused for Gemini Flash (which reliably returns JSON when
-// prompted to do so via the prompt itself). It is kept in the signature to
-// satisfy the AIClient interface and enable future use of Gemini's ResponseSchema.
 func (g *GeminiClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst any) error {
 	m := g.client.GenerativeModel(g.model)
-
-	// Instruct the model to respond with JSON only.
 	m.ResponseMIMEType = "application/json"
 
 	resp, err := m.GenerateContent(ctx, genai.Text(prompt))
@@ -48,11 +43,29 @@ func (g *GeminiClient) GenerateJSON(ctx context.Context, prompt string, _ any, d
 		return fmt.Errorf("gemini: generate content: %w", err)
 	}
 
+	return g.parseJSONResponse(resp, dst)
+}
+
+func (g *GeminiClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	m := g.client.GenerativeModel(g.model)
+	m.ResponseMIMEType = "application/json"
+
+	resp, err := m.GenerateContent(ctx, genai.Text(prompt), genai.Blob{
+		MIMEType: mimeType,
+		Data:     data,
+	})
+	if err != nil {
+		return fmt.Errorf("gemini: multimodal generate content: %w", err)
+	}
+
+	return g.parseJSONResponse(resp, dst)
+}
+
+func (g *GeminiClient) parseJSONResponse(resp *genai.GenerateContentResponse, dst any) error {
 	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
 		return fmt.Errorf("gemini: empty response")
 	}
 
-	// Concatenate all text parts.
 	var raw string
 	for _, part := range resp.Candidates[0].Content.Parts {
 		if t, ok := part.(genai.Text); ok {

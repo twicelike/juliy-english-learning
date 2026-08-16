@@ -59,6 +59,34 @@ func (r *retryClient) GenerateJSON(ctx context.Context, prompt string, schema an
 	return lastErr
 }
 
+func (r *retryClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	var lastErr error
+	delay := r.baseDelay
+
+	for attempt := 0; attempt <= r.maxRetries; attempt++ {
+		err := r.inner.GenerateMultimodalJSON(ctx, prompt, mimeType, data, schema, dst)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if !isRetryable(err) {
+			return err
+		}
+
+		if attempt < r.maxRetries {
+			slog.Warn("AI multimodal request failed, retrying", "attempt", attempt+1, "delay_ms", delay.Milliseconds(), "error", err)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= 2 // exponential back-off
+		}
+	}
+	return lastErr
+}
+
 // isRetryable returns true for transient errors worth retrying.
 func isRetryable(err error) bool {
 	if err == nil {

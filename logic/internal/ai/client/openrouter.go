@@ -109,6 +109,10 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 	return nil
 }
 
+func (o *OpenRouterClient) GenerateMultimodalJSON(ctx context.Context, prompt string, mimeType string, data []byte, schema any, dst any) error {
+	return fmt.Errorf("openrouter: multimodal generation not supported")
+}
+
 
 func (c *OpenRouterClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	return "", fmt.Errorf("GenerateText not implemented for OpenRouterClient")
