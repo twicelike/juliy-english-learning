@@ -6,6 +6,7 @@ import { AuthAPI } from "@/lib/auth-api";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
 import AITutor from "@/components/dictionary/AITutor";
+import SenseExplanation from "@/components/dictionary/SenseExplanation";
 import AudioButton from "./AudioButton";
 import { AddToSetModal } from "@/components/wordsets/AddToSetModal";
 
@@ -177,6 +178,10 @@ export default function WordDetail({ word }: WordDetailProps) {
                           ))}
                         </div>
                       )}
+
+                      <div className="ml-6 mt-2">
+                        <SenseExplanation wordId={word.id} senseIndex={def.sense_index} />
+                      </div>
                     </div>
                   ))}
                 </div>

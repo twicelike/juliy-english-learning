@@ -2,25 +2,41 @@ package dto
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
-// ExplainResponse is returned by AITutorService.ExplainWord.
-type ExplainResponse struct {
-	Summary       string   `json:"summary"`
-	Nuance        string   `json:"nuance"`
+// BatchSenseExplanation represents a single definition/context of a word
+type BatchSenseExplanation struct {
+	SenseIndex     int      `json:"senseIndex"`
+	Explanation    string   `json:"explanation"`
+	Examples       []string `json:"examples"`
 	CommonMistakes []string `json:"commonMistakes"`
-	Examples      []string `json:"examples"`
-	Register      string   `json:"register"` // e.g. "formal", "informal", "neutral"
+	UsageNote      string   `json:"usageNote"`
 }
 
-func (r *ExplainResponse) Validate() error {
-	if strings.TrimSpace(r.Summary) == "" {
-		return errors.New("AI explain: summary is empty")
+// BatchExplainResponse is returned by AI for a batch of senses.
+type BatchExplainResponse struct {
+	Explanations []BatchSenseExplanation `json:"explanations"`
+}
+
+func (r *BatchExplainResponse) Validate(requestedIndices []int) error {
+	if len(r.Explanations) != len(requestedIndices) {
+		return fmt.Errorf("AI explain: expected %d explanations, got %d", len(requestedIndices), len(r.Explanations))
 	}
-	if len(r.Examples) == 0 {
-		return errors.New("AI explain: no examples returned")
+	
+	// Create map to check for missing/extra indices
+	received := make(map[int]bool)
+	for _, exp := range r.Explanations {
+		received[exp.SenseIndex] = true
 	}
+	
+	for _, idx := range requestedIndices {
+		if !received[idx] {
+			return fmt.Errorf("AI explain: missing explanation for sense %d", idx)
+		}
+	}
+	
 	return nil
 }
 
@@ -75,17 +91,3 @@ func (r *ExamplesResponse) Validate() error {
 	return nil
 }
 
-// MnemonicResponse is returned by AITutorService.CreateMnemonic.
-type MnemonicResponse struct {
-	Word     string `json:"word"`
-	Mnemonic string `json:"mnemonic"`
-	Story    string `json:"story"`
-	Visual   string `json:"visual"`
-}
-
-func (r *MnemonicResponse) Validate() error {
-	if strings.TrimSpace(r.Mnemonic) == "" {
-		return errors.New("AI mnemonic: mnemonic is empty")
-	}
-	return nil
-}

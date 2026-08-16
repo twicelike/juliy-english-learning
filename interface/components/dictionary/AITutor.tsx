@@ -3,10 +3,8 @@
 import { useState } from "react";
 import {
   AIAPI,
-  ExplainResponse,
   NuanceResponse,
   ExamplesResponse,
-  MnemonicResponse,
 } from "@/lib/ai-api";
 
 interface AITutorProps {
@@ -14,16 +12,15 @@ interface AITutorProps {
   pos?: string;
 }
 
-type Feature = "explain" | "nuance" | "examples" | "mnemonic";
+type Feature = "nuance" | "examples";
 
 type Result =
-  | { feature: "explain"; data: ExplainResponse }
   | { feature: "nuance"; data: NuanceResponse }
-  | { feature: "examples"; data: ExamplesResponse }
-  | { feature: "mnemonic"; data: MnemonicResponse };
+  | { feature: "examples"; data: ExamplesResponse };
 
 const BUTTONS: { id: Feature; label: string; emoji: string }[] = [
-  { id: "explain", label: "Explain Word", emoji: "🧠" },
+  { id: "nuance", label: "Nuance", emoji: "🎯" },
+  { id: "examples", label: "More Examples", emoji: "📝" },
 ];
 
 export default function AITutor({ word, pos }: AITutorProps) {
@@ -38,11 +35,14 @@ export default function AITutor({ word, pos }: AITutorProps) {
     setResult(null);
     try {
       const req = { word, pos: pos ?? "" };
-      if (feature === "explain") {
-        const data = await AIAPI.explainWord(req);
+      if (feature === "nuance") {
+        const data = await AIAPI.explainNuance(req);
         setResult({ feature, data });
-        setHasFetched(true);
+      } else if (feature === "examples") {
+        const data = await AIAPI.generateExamples(req);
+        setResult({ feature, data });
       }
+      setHasFetched(true);
     } catch (e: any) {
       setError(e?.message ?? "AI is unavailable right now.");
     } finally {
@@ -94,39 +94,52 @@ export default function AITutor({ word, pos }: AITutorProps) {
       {/* Results */}
       {result && (
         <div className="rounded-3xl bg-white/5 border border-white/10 p-6 space-y-4 animate-in fade-in duration-300">
-          {result.feature === "explain" && (
-            <>
-              <Section title="Summary" icon="📖">{result.data.summary}</Section>
-              <Section title="Nuance" icon="🎯">{result.data.nuance}</Section>
-              {result.data.commonMistakes.length > 0 && (
+          {result.feature === "nuance" && (
+            <Section title="Nuance" icon="🎯">
+              <div className="space-y-4">
                 <div>
-                  <SectionHeader icon="⚠️" title="Common Mistakes" />
-                  <ul className="space-y-1 mt-2">
-                    {result.data.commonMistakes.map((m, i) => (
-                      <li key={i} className="text-white/60 text-sm flex gap-2">
-                        <span className="text-red-400 shrink-0">•</span>{m}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Core Meaning</p>
+                  <p>{result.data.coreMeaning}</p>
                 </div>
-              )}
-              {result.data.examples.length > 0 && (
                 <div>
-                  <SectionHeader icon="💬" title="Examples" />
-                  <ul className="space-y-1 mt-2">
-                    {result.data.examples.map((ex, i) => (
-                      <li key={i} className="text-white/60 text-sm italic">"{ex}"</li>
-                    ))}
-                  </ul>
+                  <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Subtle Meaning</p>
+                  <p>{result.data.subtleMeaning}</p>
                 </div>
-              )}
-              {result.data.register && (
-                <p className="text-white/40 text-xs">
-                  Register: <span className="text-indigo-300 capitalize">{result.data.register}</span>
-                </p>
-              )}
-            </>
+                {result.data.usageNotes?.length > 0 && (
+                  <div>
+                    <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Usage Notes</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {result.data.usageNotes.map((note, i) => <li key={i}>{note}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {result.data.confusedWith?.length > 0 && (
+                  <div>
+                    <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Confused With</p>
+                    <div className="flex gap-2">
+                      {result.data.confusedWith.map((word, i) => (
+                        <span key={i} className="px-2 py-1 bg-white/10 rounded text-xs">{word}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
           )}
+
+          {result.feature === "examples" && (
+            <Section title="More Examples" icon="📝">
+              <ul className="space-y-3">
+                {result.data.examples.map((ex, i) => (
+                  <li key={i} className="text-white/80 italic border-l-2 border-indigo-500/30 pl-3">
+                    "{ex}"
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+
         </div>
       )}
     </div>
@@ -147,7 +160,7 @@ function Section({ title, icon, children }: { title: string; icon: string; child
   return (
     <div>
       <SectionHeader icon={icon} title={title} />
-      <p className="text-white/80 text-sm leading-relaxed mt-1">{children}</p>
+      <div className="text-white/80 text-sm leading-relaxed mt-1">{children}</div>
     </div>
   );
 }

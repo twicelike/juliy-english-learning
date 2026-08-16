@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Mic, AlertCircle, Loader2 } from "lucide-react";
 import { SpeakingAPI, SpeakingTask, SpeakingTaskType } from "@/lib/speaking-api";
 
-export default function SpeakingPreviewPage() {
+function SpeakingPreviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const topicParam = searchParams.get("topic") || "random";
@@ -177,5 +177,18 @@ export default function SpeakingPreviewPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function SpeakingPreviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-2xl mx-auto px-6 pt-12 pb-24 flex flex-col items-center justify-center min-h-[50vh]">
+        <Loader2 size={48} className="animate-spin text-indigo-500 mb-4" />
+        <p className="text-white/60">Preparing your speaking task...</p>
+      </div>
+    }>
+      <SpeakingPreviewContent />
+    </Suspense>
   );
 }

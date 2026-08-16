@@ -154,7 +154,6 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
                         <span className="text-indigo-400 font-bold mr-2">{i + 1}.</span>
                         {def.definition}
                       </p>
-
                     </div>
                   ))}
                 </div>

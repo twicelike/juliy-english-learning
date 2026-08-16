@@ -13,6 +13,8 @@ type PromptContext struct {
 	// NativeLanguage is used to tailor common-mistake notes.
 	// Example: "Vietnamese".
 	NativeLanguage string
+	// ContextSentence is an optional sentence where the word was encountered.
+	ContextSentence string
 }
 
 // defaults returns a copy with sensible fallbacks applied.

@@ -179,7 +179,8 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		if rawAI != nil && errAI == nil {
 			aiCache := ai.NewMemoryCache()
 			aiLimiter := ai.NewMemoryRateLimiter(cfg.AIRateLimit)
-			aiService := ai.NewService(aiClientWrapped, aiCache, dictRepo, aiLimiter)
+			aiRepo := ai.NewRepository(mongoClient.Database(cfg.MongoDB))
+			aiService := ai.NewService(aiClientWrapped, aiCache, aiRepo, dictRepo, aiLimiter)
 			aiHandler := ai.NewHandler(aiService, aiLimiter)
 			ai.RegisterRoutes(v1, aiHandler, cfg.JWTSecret)
 

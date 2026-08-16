@@ -3,14 +3,17 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/english/backend/internal/ai/dto"
 	"github.com/english/backend/internal/ai/prompts"
 	"github.com/english/backend/internal/dictionary"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // cacheTTLGlobal is used for AI responses that do not depend on user identity.
@@ -21,15 +24,17 @@ type service struct {
 	client      AIClient
 	cache       Cache
 	explRepo    ExplanationRepo
+	dictRepo    dictionary.Repository
 	rateLimiter RateLimiter
 }
 
 // NewService constructs an AITutorService with the given dependencies.
-func NewService(client AIClient, cache Cache, explRepo ExplanationRepo, rateLimiter RateLimiter) AITutorService {
+func NewService(client AIClient, cache Cache, explRepo ExplanationRepo, dictRepo dictionary.Repository, rateLimiter RateLimiter) AITutorService {
 	return &service{
 		client:      client,
 		cache:       cache,
 		explRepo:    explRepo,
+		dictRepo:    dictRepo,
 		rateLimiter: rateLimiter,
 	}
 }
@@ -38,38 +43,135 @@ func NewService(client AIClient, cache Cache, explRepo ExplanationRepo, rateLimi
 // Word features
 // -----------------------------------------------------------------------
 
-func (s *service) ExplainWord(ctx context.Context, pctx PromptContext) (*dto.ExplainResponse, error) {
+func (s *service) ExplainSense(ctx context.Context, wordID string, senseIndex int, userLevel, nativeLang string) (*dto.BatchSenseExplanation, error) {
+	const ExplainPromptVersion = 3
+
 	// 1. Try to fetch from database cache first
-	cached, err := s.explRepo.GetAIExplanation(ctx, pctx.Word, pctx.POS, pctx.UserLevel, pctx.NativeLanguage)
+	cached, err := s.explRepo.GetSenseExplanation(ctx, wordID, senseIndex, userLevel, nativeLang, ExplainPromptVersion)
 	if err == nil && cached != nil {
-		slog.Info("AI DB cache hit", "word", pctx.Word, "level", pctx.UserLevel)
-		return &cached.Explanation, nil
+		slog.Info("AI DB cache hit", "wordId", wordID, "senseIndex", senseIndex, "level", userLevel, "version", ExplainPromptVersion)
+		return &dto.BatchSenseExplanation{
+			SenseIndex:     cached.SenseIndex,
+			Explanation:    cached.Explanation,
+			Examples:       cached.Examples,
+			CommonMistakes: cached.CommonMistakes,
+			UsageNote:      cached.UsageNote,
+		}, nil
 	}
 
-	// 2. Not in DB, generate with AI
-	prompt := prompts.BuildExplainPrompt(toPromptCtx(pctx))
-	var resp dto.ExplainResponse
-	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
-		return nil, fmt.Errorf("ai: explain word: %w", err)
+	// 2. Fetch dictionary document
+	objID, err := bson.ObjectIDFromHex(wordID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid word id: %w", err)
 	}
-	if err := resp.Validate(); err != nil {
+	wordDoc, err := s.dictRepo.GetByID(ctx, objID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get word from dictionary: %w", err)
+	}
+	if wordDoc == nil {
+		return nil, errors.New("word not found in dictionary")
+	}
+
+	if senseIndex < 0 || senseIndex >= len(wordDoc.Senses) {
+		return nil, errors.New("invalid sense index for word")
+	}
+	targetSense := wordDoc.Senses[senseIndex]
+	if len(targetSense.Glosses) == 0 {
+		return nil, errors.New("target sense has no definition")
+	}
+
+	// 3. Fetch cached sense indices to find unexplained senses
+	cachedIndices, err := s.explRepo.GetCachedSenseIndices(ctx, wordID, userLevel, nativeLang, ExplainPromptVersion)
+	if err != nil {
+		slog.Warn("Failed to get cached sense indices", "err", err)
+		cachedIndices = make(map[int]bool)
+	}
+
+	// 4. Select candidate senses (max 4 + 1 target)
+	var candidates []prompts.SensePromptData
+	for i, sense := range wordDoc.Senses {
+		if i == senseIndex || cachedIndices[i] || len(sense.Glosses) == 0 {
+			continue
+		}
+		candidates = append(candidates, prompts.SensePromptData{
+			Index:      i,
+			Definition: sense.Glosses[0], // First gloss is the main definition
+		})
+	}
+
+	// Shuffle candidates and pick max 4
+	if len(candidates) > 4 {
+		rand.Shuffle(len(candidates), func(i, j int) {
+			candidates[i], candidates[j] = candidates[j], candidates[i]
+		})
+		candidates = candidates[:4]
+	}
+
+	// Prepend the target sense
+	batchSenses := append([]prompts.SensePromptData{{
+		Index:      senseIndex,
+		Definition: targetSense.Glosses[0],
+	}}, candidates...)
+
+	var requestedIndices []int
+	for _, s := range batchSenses {
+		requestedIndices = append(requestedIndices, s.Index)
+	}
+
+	slog.Info("AI generating batch explanations", "wordId", wordID, "batchSize", len(batchSenses), "indices", requestedIndices)
+
+	// 5. Generate with AI
+	pctx := prompts.PromptContext{
+		Word:           wordDoc.Word,
+		POS:            wordDoc.POS,
+		UserLevel:      userLevel,
+		NativeLanguage: nativeLang,
+	}
+	prompt := prompts.BuildBatchExplainPrompt(pctx, batchSenses)
+	var resp dto.BatchExplainResponse
+	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
+		return nil, fmt.Errorf("ai: generate batch explanation: %w", err)
+	}
+
+	// 6. Validate exactly matches the requested indices
+	if err := resp.Validate(requestedIndices); err != nil {
+		// DO NOT save to cache if validation fails
 		return nil, fmt.Errorf("%w: %s", ErrInvalidAIResponse, err)
 	}
 
-	// 3. Save to database for future requests
-	expl := &dictionary.AIExplanation{
-		Word:           pctx.Word,
-		POS:            pctx.POS,
-		UserLevel:      pctx.UserLevel,
-		NativeLanguage: pctx.NativeLanguage,
-		Explanation:    resp,
-		CreatedAt:      time.Now().UTC(),
-	}
-	if err := s.explRepo.SaveAIExplanation(ctx, expl); err != nil {
-		slog.Error("Failed to save AI explanation to DB", "word", pctx.Word, "error", err)
+	// 7. Save to database for future requests
+	var toSave []SenseExplanation
+	var targetResponse *dto.BatchSenseExplanation
+
+	for _, exp := range resp.Explanations {
+		toSave = append(toSave, SenseExplanation{
+			WordID:         wordID,
+			SenseIndex:     exp.SenseIndex,
+			UserLevel:      userLevel,
+			NativeLanguage: nativeLang,
+			Explanation:    exp.Explanation,
+			Examples:       exp.Examples,
+			CommonMistakes: exp.CommonMistakes,
+			UsageNote:      exp.UsageNote,
+			PromptVersion:  ExplainPromptVersion,
+		})
+		
+		if exp.SenseIndex == senseIndex {
+			expCopy := exp // Copy to avoid pointer issues
+			targetResponse = &expCopy
+		}
 	}
 
-	return &resp, nil
+	if err := s.explRepo.SaveBatchSenseExplanations(ctx, toSave); err != nil {
+		slog.Error("Failed to save batch explanations", "err", err)
+	}
+
+	if targetResponse == nil {
+		// Should not happen due to validation, but just in case
+		return nil, fmt.Errorf("ai response missing target sense %d", senseIndex)
+	}
+
+	return targetResponse, nil
 }
 
 func (s *service) ExplainNuance(ctx context.Context, pctx PromptContext) (*dto.NuanceResponse, error) {
@@ -123,26 +225,6 @@ func (s *service) GenerateExamples(ctx context.Context, pctx PromptContext) (*dt
 	prompt := prompts.BuildExamplesPrompt(toPromptCtx(pctx))
 	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
 		return nil, fmt.Errorf("ai: generate examples: %w", err)
-	}
-	if err := resp.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidAIResponse, err)
-	}
-
-	_ = s.cache.Set(ctx, key, &resp, cacheTTLGlobal)
-	return &resp, nil
-}
-
-func (s *service) CreateMnemonic(ctx context.Context, pctx PromptContext) (*dto.MnemonicResponse, error) {
-	key := globalKey("mnemonic", pctx)
-	var resp dto.MnemonicResponse
-	if hit, _ := s.cache.Get(ctx, key, &resp); hit {
-		slog.Info("AI cache hit", "key", key)
-		return &resp, nil
-	}
-
-	prompt := prompts.BuildMnemonicPrompt(toPromptCtx(pctx))
-	if err := s.client.GenerateJSON(ctx, prompt, nil, &resp); err != nil {
-		return nil, fmt.Errorf("ai: create mnemonic: %w", err)
 	}
 	if err := resp.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidAIResponse, err)
@@ -221,10 +303,11 @@ func globalKey(action string, pctx PromptContext) string {
 // toPromptCtx converts an ai.PromptContext to prompts.PromptContext.
 func toPromptCtx(p PromptContext) prompts.PromptContext {
 	return prompts.PromptContext{
-		Word:           p.Word,
-		POS:            p.POS,
-		UserLevel:      p.UserLevel,
-		NativeLanguage: p.NativeLanguage,
+		Word:            p.Word,
+		POS:             p.POS,
+		UserLevel:       p.UserLevel,
+		NativeLanguage:  p.NativeLanguage,
+		ContextSentence: p.ContextSentence,
 	}
 }
 

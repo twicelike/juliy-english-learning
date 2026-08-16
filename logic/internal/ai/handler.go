@@ -26,12 +26,22 @@ func NewHandler(service AITutorService, rateLimiter RateLimiter) *Handler {
 // Request / Response types
 // -----------------------------------------------------------------------
 
-type wordRequest struct {
-	Word           string `json:"word" binding:"required"`
-	POS            string `json:"pos"`
+type explainSenseRequest struct {
+	WordID         string `json:"wordId" binding:"required"`
+	SenseIndex     int    `json:"senseIndex"`
 	UserLevel      string `json:"userLevel"`
 	NativeLanguage string `json:"nativeLanguage"`
 }
+
+type wordRequest struct {
+	Word           string `json:"word" binding:"required"`
+	POS            string `json:"pos"`
+	Context        string `json:"context,omitempty"`
+	UserLevel      string `json:"userLevel"`
+	NativeLanguage string `json:"nativeLanguage"`
+}
+
+
 
 type compareRequest struct {
 	Word1          string `json:"word1" binding:"required"`
@@ -60,24 +70,21 @@ type fillBlankRequest struct {
 // Word handlers
 // -----------------------------------------------------------------------
 
-// POST /api/v1/ai/words/explain
-func (h *Handler) ExplainWord(c *gin.Context) {
+// POST /api/v1/ai/words/explain-sense
+func (h *Handler) ExplainSense(c *gin.Context) {
 	userID := c.GetString(middleware.UserIDKey)
 	if err := h.rateLimiter.Allow(c.Request.Context(), userID); err != nil {
 		domain.Fail(c, http.StatusTooManyRequests, "RATE_LIMITED", err.Error())
 		return
 	}
 
-	var req wordRequest
+	var req explainSenseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 		return
 	}
 
-	resp, err := h.service.ExplainWord(c.Request.Context(), PromptContext{
-		Word: req.Word, POS: req.POS,
-		UserLevel: req.UserLevel, NativeLanguage: req.NativeLanguage,
-	})
+	resp, err := h.service.ExplainSense(c.Request.Context(), req.WordID, req.SenseIndex, req.UserLevel, req.NativeLanguage)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
@@ -160,30 +167,6 @@ func (h *Handler) GenerateExamples(c *gin.Context) {
 	domain.OK(c, resp)
 }
 
-// POST /api/v1/ai/words/mnemonic
-func (h *Handler) CreateMnemonic(c *gin.Context) {
-	userID := c.GetString(middleware.UserIDKey)
-	if err := h.rateLimiter.Allow(c.Request.Context(), userID); err != nil {
-		domain.Fail(c, http.StatusTooManyRequests, "RATE_LIMITED", err.Error())
-		return
-	}
-
-	var req wordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
-		return
-	}
-
-	resp, err := h.service.CreateMnemonic(c.Request.Context(), PromptContext{
-		Word: req.Word, POS: req.POS,
-		UserLevel: req.UserLevel, NativeLanguage: req.NativeLanguage,
-	})
-	if err != nil {
-		h.handleServiceError(c, err)
-		return
-	}
-	domain.OK(c, resp)
-}
 
 // -----------------------------------------------------------------------
 // Writing handlers

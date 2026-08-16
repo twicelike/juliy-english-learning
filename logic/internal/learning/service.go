@@ -379,27 +379,32 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	}
 
 	if active != nil {
-		isValid := true
-		if len(wordIDs) == 0 {
-			isValid = false
+		// Expire old session if user chose different parameters
+		paramsChanged := active.WordCount != wordCount ||
+			(active.Strategy == nil || *active.Strategy != strategy)
+		if paramsChanged {
+			_ = s.repo.UpdateSessionStatus(ctx, active.ID, SessionExpired)
 		} else {
-			currentWordIDs := make(map[string]bool)
-			for _, ref := range wordIDs {
-				key := fmt.Sprintf("%s:%d", ref.WordID.Hex(), ref.SenseIndex)
-				currentWordIDs[key] = true
-			}
-			for _, item := range active.Items {
-				key := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
-				if !currentWordIDs[key] {
-					isValid = false
-					break
+			// Same params: validate that all items are still in the word set
+			isValid := len(wordIDs) > 0
+			if isValid {
+				currentWordIDs := make(map[string]bool)
+				for _, ref := range wordIDs {
+					key := fmt.Sprintf("%s:%d", ref.WordID.Hex(), ref.SenseIndex)
+					currentWordIDs[key] = true
+				}
+				for _, item := range active.Items {
+					key := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
+					if !currentWordIDs[key] {
+						isValid = false
+						break
+					}
 				}
 			}
-		}
 
-		if isValid {
-			return s.buildSessionDTO(ctx, active)
-		} else {
+			if isValid {
+				return s.buildSessionDTO(ctx, active)
+			}
 			_ = s.repo.UpdateSessionStatus(ctx, active.ID, SessionExpired)
 		}
 	}

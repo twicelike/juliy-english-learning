@@ -27,10 +27,7 @@ export default async function HomePage() {
       <div className="relative z-10 w-full max-w-4xl text-center mb-16">
 
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-tight">
-          Dictionary & <br />
-          <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-            AI Tutor
-          </span>
+          Dictionary
         </h1>
 
         {/* Search Bar */}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DictionaryAPI, WordDTO } from "@/lib/dictionary-api";
 
@@ -9,8 +10,14 @@ export default function SearchBar() {
   const [results, setResults] = useState<WordDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -35,6 +42,30 @@ export default function SearchBar() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Update dropdown position — called on mount, scroll, resize, and whenever dropdown opens
+  const updateDropdownPos = () => {
+    if (showDropdown && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+      });
+    }
+  };
+
+  useEffect(() => {
+    updateDropdownPos();
+    window.addEventListener("scroll", updateDropdownPos, true);
+    window.addEventListener("resize", updateDropdownPos);
+    return () => {
+      window.removeEventListener("scroll", updateDropdownPos, true);
+      window.removeEventListener("resize", updateDropdownPos);
+    };
+  }, [showDropdown, query]);
+
   // Click outside to close dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -58,8 +89,38 @@ export default function SearchBar() {
     }
   };
 
+  const dropdown = showDropdown && query.trim() && !loading && (
+    <div
+      className="bg-[#12121c] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto"
+      style={dropdownStyle}
+    >
+      {results.length > 0 ? (
+        <ul className="py-2">
+          {results.map((w, index) => (
+            <li key={`${w.word}-${w.pos}-${index}`}>
+              <button
+                onClick={() => handleSelect(w.word)}
+                className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center justify-between group"
+              >
+                <div>
+                  <span className="text-white font-medium group-hover:text-indigo-300">{w.word}</span>
+                  {w.pos && <span className="ml-2 text-xs text-white/40 italic">{w.pos}</span>}
+                </div>
+                {w.ipa && <span className="text-xs text-indigo-200/50">{w.ipa}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="p-6 text-center text-white/50 text-sm">
+          Không tìm thấy từ "{query}"
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div ref={wrapperRef} className="relative w-full max-w-2xl mx-auto z-50">
+    <div ref={wrapperRef} className="relative w-full max-w-2xl mx-auto">
       <div className="relative flex items-center">
         <input
           type="text"
@@ -90,33 +151,8 @@ export default function SearchBar() {
         )}
       </div>
 
-      {/* Dropdown */}
-      {showDropdown && query.trim() && !loading && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-[#12121c] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto">
-          {results.length > 0 ? (
-            <ul className="py-2">
-              {results.map((w, index) => (
-                <li key={`${w.word}-${w.pos}-${index}`}>
-                  <button
-                    onClick={() => handleSelect(w.word)}
-                    className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <span className="text-white font-medium group-hover:text-indigo-300">{w.word}</span>
-                      {w.pos && <span className="ml-2 text-xs text-white/40 italic">{w.pos}</span>}
-                    </div>
-                    {w.ipa && <span className="text-xs text-indigo-200/50">{w.ipa}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="p-6 text-center text-white/50 text-sm">
-              Không tìm thấy từ "{query}"
-            </div>
-          )}
-        </div>
-      )}
+      {/* Dropdown rendered via Portal to escape stacking context */}
+      {mounted && dropdown && createPortal(dropdown, document.body)}
     </div>
   );
 }

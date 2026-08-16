@@ -14,11 +14,11 @@ func RegisterRoutes(rg *gin.RouterGroup, h *Handler, jwtSecret string) {
 	{
 		words := ai.Group("/words")
 		{
-			words.POST("/explain", h.ExplainWord)
+			words.POST("/explain-sense", h.ExplainSense)
 			words.POST("/nuance", h.ExplainNuance)
 			words.POST("/compare", h.CompareWords)
 			words.POST("/examples", h.GenerateExamples)
-			words.POST("/mnemonic", h.CreateMnemonic)
+
 		}
 
 		writing := ai.Group("/writing")

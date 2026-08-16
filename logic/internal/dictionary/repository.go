@@ -10,15 +10,13 @@ import (
 )
 
 type repository struct {
-	coll          *mongo.Collection
-	explColl      *mongo.Collection
+	coll *mongo.Collection
 }
 
 // NewRepository creates a new dictionary repository.
 func NewRepository(db *mongo.Database) Repository {
 	return &repository{
-		coll:     db.Collection("words"),
-		explColl: db.Collection("ai_explanations"),
+		coll: db.Collection("words"),
 	}
 }
 
@@ -59,46 +57,6 @@ func (r *repository) SearchPrefix(ctx context.Context, prefix string, limit int)
 	}
 
 	return words, nil
-}
-
-// -----------------------------------------------------------------------------
-// AI Explanations Cache
-// -----------------------------------------------------------------------------
-
-func (r *repository) GetAIExplanation(ctx context.Context, word, pos, level, nativeLang string) (*AIExplanation, error) {
-	filter := bson.M{
-		"word":           word,
-		"pos":            pos,
-		"userLevel":      level,
-		"nativeLanguage": nativeLang,
-	}
-
-	var expl AIExplanation
-	err := r.explColl.FindOne(ctx, filter).Decode(&expl)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, nil // Cache miss
-		}
-		return nil, err
-	}
-
-	return &expl, nil
-}
-
-func (r *repository) SaveAIExplanation(ctx context.Context, expl *AIExplanation) error {
-	filter := bson.M{
-		"word":           expl.Word,
-		"pos":            expl.POS,
-		"userLevel":      expl.UserLevel,
-		"nativeLanguage": expl.NativeLanguage,
-	}
-	update := bson.M{
-		"$set": expl,
-	}
-	opts := options.UpdateOne().SetUpsert(true)
-
-	_, err := r.explColl.UpdateOne(ctx, filter, update, opts)
-	return err
 }
 
 func (r *repository) GetWord(ctx context.Context, word string) (*WordDocument, error) {

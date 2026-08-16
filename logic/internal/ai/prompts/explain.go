@@ -2,23 +2,45 @@ package prompts
 
 import "fmt"
 
-// BuildExplainPrompt returns a system+user prompt instructing the AI to explain
-// a vocabulary word and return structured JSON.
-func BuildExplainPrompt(ctx PromptContext) string {
+type SensePromptData struct {
+	Index      int
+	Definition string
+}
+
+// BuildBatchExplainPrompt returns a system+user prompt instructing the AI to explain
+// a batch of dictionary senses for a vocabulary word and return structured JSON.
+func BuildBatchExplainPrompt(ctx PromptContext, batchSenses []SensePromptData) string {
 	ctx = ctx.defaults()
+
+	sensesBlock := ""
+	for _, s := range batchSenses {
+		sensesBlock += fmt.Sprintf("Sense %d:\n%s\n\n", s.Index, s.Definition)
+	}
+
 	return fmt.Sprintf(`You are an expert English vocabulary teacher helping a %s-level learner whose native language is %s.
 
-Explain the English word "%s" (%s) thoroughly.
+I will give you a batch of distinct senses/definitions for the English word "%s" (POS: %s).
+You must explain ALL of these senses thoroughly.
+Do NOT skip any sense.
+Explain each sense independently.
+Do NOT merge the meanings.
+Do NOT generate Vietnamese translations unless explicitly instructed. The explanation should focus on helping the user understand and use that specific sense.
+
+Here is the batch of senses to explain:
+%s
 
 Return ONLY a JSON object — no markdown, no preamble — that exactly matches this structure:
 {
-  "summary": "A concise 1–2 sentence explanation appropriate for a %s learner.",
-  "nuance": "Subtle connotations or usage nuances.",
-  "commonMistakes": ["Mistake 1 that %s speakers make", "Mistake 2"],
-  "examples": ["Example sentence 1.", "Example sentence 2.", "Example sentence 3."],
-  "register": "formal | informal | neutral"
-}`, ctx.UserLevel, ctx.NativeLanguage, ctx.Word, ctx.POS,
-		ctx.UserLevel, ctx.NativeLanguage)
+  "explanations": [
+    {
+      "senseIndex": <exact integer from the sense block>,
+      "explanation": "A concise 1-2 sentence explanation appropriate for a %s learner focusing on this specific sense.",
+      "examples": ["Example sentence 1.", "Example sentence 2."],
+      "commonMistakes": ["Mistake 1 that %s speakers make with this specific sense", "Mistake 2"],
+      "usageNote": "Subtle connotations, register (formal/informal), or nuances for this sense."
+    }
+  ]
+}`, ctx.UserLevel, ctx.NativeLanguage, ctx.Word, ctx.POS, sensesBlock, ctx.UserLevel, ctx.NativeLanguage)
 }
 
 // BuildNuancePrompt returns a prompt focused on subtle meaning distinctions.
@@ -51,18 +73,3 @@ Return ONLY a JSON object matching:
 }`, ctx.Word, ctx.POS, ctx.UserLevel, ctx.Word)
 }
 
-// BuildMnemonicPrompt returns a prompt that creates a memorable mnemonic.
-func BuildMnemonicPrompt(ctx PromptContext) string {
-	ctx = ctx.defaults()
-	return fmt.Sprintf(`You are a memory coach helping a %s-level English learner whose native language is %s.
-
-Create a creative mnemonic to remember the word "%s" (%s).
-
-Return ONLY a JSON object matching:
-{
-  "word": "%s",
-  "mnemonic": "A catchy phrase or acronym.",
-  "story": "A very short memorable story (2–3 sentences).",
-  "visual": "Describe a vivid mental image to associate with this word."
-}`, ctx.UserLevel, ctx.NativeLanguage, ctx.Word, ctx.POS, ctx.Word)
-}

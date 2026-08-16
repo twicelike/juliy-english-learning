@@ -5,6 +5,7 @@ import apiClient from "@/lib/api-client";
 export interface WordAIRequest {
   word: string;
   pos?: string;
+  context?: string;
   userLevel?: string;      // A1 | A2 | B1 | B2 | C1 | C2
   nativeLanguage?: string; // e.g. "Vietnamese"
 }
@@ -31,12 +32,19 @@ export interface FillBlankAIRequest {
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
-export interface ExplainResponse {
-  summary: string;
-  nuance: string;
-  commonMistakes: string[];
+export interface ExplainSenseRequest {
+  wordId: string;
+  senseIndex: number;
+  userLevel?: string;
+  nativeLanguage?: string;
+}
+
+export interface BatchSenseExplanation {
+  senseIndex: number;
+  explanation: string;
   examples: string[];
-  register: string;
+  commonMistakes: string[];
+  usageNote: string;
 }
 
 export interface NuanceResponse {
@@ -59,12 +67,7 @@ export interface ExamplesResponse {
   examples: string[];
 }
 
-export interface MnemonicResponse {
-  word: string;
-  mnemonic: string;
-  story: string;
-  visual: string;
-}
+
 
 export interface GrammarMistake {
   wrong: string;
@@ -106,9 +109,9 @@ const DEFAULT_CTX = { userLevel: "B1", nativeLanguage: "Vietnamese" };
 
 // ─── API client ───────────────────────────────────────────────────────────────
 export const AIAPI = {
-  explainWord: (req: WordAIRequest) =>
+  explainSense: (req: ExplainSenseRequest) =>
     apiClient
-      .post<{ data: ExplainResponse }>("/ai/words/explain", { ...DEFAULT_CTX, ...req })
+      .post<{ data: BatchSenseExplanation }>("/ai/words/explain-sense", { ...DEFAULT_CTX, ...req })
       .then((r) => r.data.data),
 
   explainNuance: (req: WordAIRequest) =>
@@ -126,10 +129,7 @@ export const AIAPI = {
       .post<{ data: ExamplesResponse }>("/ai/words/examples", { ...DEFAULT_CTX, ...req })
       .then((r) => r.data.data),
 
-  createMnemonic: (req: WordAIRequest) =>
-    apiClient
-      .post<{ data: MnemonicResponse }>("/ai/words/mnemonic", { ...DEFAULT_CTX, ...req })
-      .then((r) => r.data.data),
+
 
   checkGrammar: (req: TextAIRequest) =>
     apiClient
