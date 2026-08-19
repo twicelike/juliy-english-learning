@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/english/backend/internal/evaluation"
+	"github.com/english/backend/internal/events"
 	"github.com/english/backend/internal/gamification"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -23,13 +25,17 @@ type service struct {
 	repo      *Repository
 	generator *GeneratorService
 	gamiSvc   gamification.Service
+	evalSvc   evaluation.Service
+	publisher events.Publisher
 }
 
-func NewService(repo *Repository, generator *GeneratorService, gamiSvc gamification.Service) WritingService {
+func NewService(repo *Repository, generator *GeneratorService, gamiSvc gamification.Service, evalSvc evaluation.Service, publisher events.Publisher) WritingService {
 	return &service{
 		repo:      repo,
 		generator: generator,
 		gamiSvc:   gamiSvc,
+		evalSvc:   evalSvc,
+		publisher: publisher,
 	}
 }
 
@@ -163,6 +169,7 @@ func (s *service) SubmitMission(ctx context.Context, userIDStr string, missionID
 
 	// Log the actual submission
 	submission := &WritingSubmission{
+		ID:               bson.NewObjectID(),
 		UserID:           userID,
 		MissionID:        missionID,
 		UserContent:      content,
@@ -173,6 +180,31 @@ func (s *service) SubmitMission(ctx context.Context, userIDStr string, missionID
 	if err := s.repo.InsertSubmission(ctx, submission); err != nil {
 		// Log error but don't fail the request since progress was saved
 		fmt.Printf("failed to log submission history: %v\n", err)
+	}
+
+	if s.evalSvc != nil {
+		ev := &evaluation.Evidence{
+			UserID:     userID,
+			EventID:    submission.ID.Hex(),
+			Skill:      "writing", // From profile.SkillWriting
+			Score:      float64(evalResp.Score),
+			Weight:     evaluation.WeightWriting,
+			Source:     evaluation.SourceWritingLab,
+			Metadata:   bson.M{"mission_id": missionID.Hex(), "attempt_id": submission.ID.Hex()},
+		}
+		go func(e *evaluation.Evidence) {
+			bgCtx := context.Background()
+			_ = s.evalSvc.RecordEvidence(bgCtx, e)
+			
+			// Publish profile refresh event
+			if s.publisher != nil {
+				_ = s.publisher.Publish(bgCtx, events.Event{
+					Type:   events.EventTypeProfileRefreshRequested,
+					UserID: userIDStr,
+					Reason: "writing_mission_completed",
+				})
+			}
+		}(ev)
 	}
 
 	if s.gamiSvc != nil {

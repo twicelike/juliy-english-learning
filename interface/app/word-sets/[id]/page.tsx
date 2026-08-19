@@ -234,7 +234,7 @@ export default function WordSetViewerPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#0f0f17] overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
       {/* ─── Header ────────────────────────────────────────────── */}
       <header className="h-16 shrink-0 border-b border-white/10 flex items-center justify-between px-6 bg-black/20">
         <div className="flex items-center gap-6">

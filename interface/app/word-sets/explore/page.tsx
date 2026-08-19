@@ -87,12 +87,12 @@ export default function ExploreWordSetsPage() {
   if (!user) return null;
 
   return (
-    <div className="flex flex-col h-screen bg-[#0f0f17] overflow-hidden">
-      <header className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-white/5 bg-[#12121c] z-10">
+    <div className="flex flex-col h-screen overflow-hidden">
+      <header className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/5 z-10">
         <div className="flex items-center gap-4">
           <Link
             href="/word-sets"
-            className="text-white/40 hover:text-white transition-colors text-sm font-medium flex items-center gap-2"
+            className="opacity-40 hover:opacity-100 transition-opacity text-sm font-medium flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -101,8 +101,8 @@ export default function ExploreWordSetsPage() {
           </Link>
           <div className="h-6 w-px bg-white/10" />
           <div>
-            <h1 className="text-white font-bold text-lg leading-tight">Explore</h1>
-            <span className="text-xs text-white/40">Discover vocabulary from the community</span>
+            <h1 className="font-bold text-lg leading-tight">Explore</h1>
+            <span className="text-xs opacity-40">Discover vocabulary from the community</span>
           </div>
         </div>
       </header>
@@ -113,7 +113,7 @@ export default function ExploreWordSetsPage() {
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="relative flex-1">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="w-5 h-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -122,12 +122,12 @@ export default function ExploreWordSetsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search word sets..."
-                className="w-full bg-[#1e1e2d] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
             <button
               type="submit"
-              className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-colors"
+              className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 font-semibold rounded-xl transition-colors text-white"
             >
               Search
             </button>
@@ -137,7 +137,7 @@ export default function ExploreWordSetsPage() {
             <select
               value={topic}
               onChange={e => setTopic(e.target.value)}
-              className="bg-[#1e1e2d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative"
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative"
             >
               <option value="">All Topics</option>
               {availableTopics.map(t => <option key={t} value={t}>{t}</option>)}
@@ -146,7 +146,7 @@ export default function ExploreWordSetsPage() {
             <select
               value={difficulty}
               onChange={e => setDifficulty(e.target.value)}
-              className="bg-[#1e1e2d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative"
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative"
             >
               <option value="">All Difficulties</option>
               <option value="Beginner">Beginner</option>
@@ -157,7 +157,7 @@ export default function ExploreWordSetsPage() {
             <select
               value={sort}
               onChange={e => setSort(e.target.value)}
-              className="bg-[#1e1e2d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative ml-auto"
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none pr-8 relative ml-auto"
             >
               <option value="popular">Popular</option>
               <option value="newest">Newest</option>
@@ -174,10 +174,10 @@ export default function ExploreWordSetsPage() {
             </div>
           ) : sets.length === 0 ? (
             <div className="py-20 text-center flex flex-col items-center">
-              <svg className="w-16 h-16 text-white/10 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-16 h-16 opacity-10 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <p className="text-white/40">No word sets found.</p>
+              <p className="opacity-40">No word sets found.</p>
             </div>
           ) : (
             <>
@@ -197,7 +197,7 @@ export default function ExploreWordSetsPage() {
                   <button
                     onClick={() => loadSets(false)}
                     disabled={loading}
-                    className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-colors text-sm font-semibold disabled:opacity-50"
+                    className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-sm font-semibold disabled:opacity-50"
                   >
                     {loading ? "Loading..." : "Load More"}
                   </button>

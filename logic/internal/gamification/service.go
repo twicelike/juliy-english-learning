@@ -37,14 +37,17 @@ func CalculateLevel(totalXP int) (level int, currentXP int, nextLevelXP int) {
 	return
 }
 
-func (s *service) TrackActivity(ctx context.Context, userID string, activity ActivityType, isCorrect bool, dailyGoal int) error {
+func (s *service) TrackActivity(ctx context.Context, userID string, activity ActivityType, count int, correctCount int, customXP int, dailyGoal int) error {
 	oid, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
 		return fmt.Errorf("invalid user id: %w", err)
 	}
 
 	today := time.Now().Format("2006-01-02")
-	xpGained := activity.XP()
+	xpGained := customXP
+	if xpGained == 0 {
+		xpGained = activity.XP() * count
+	}
 
 	// 1. Update Daily Progress
 	dp, err := s.repo.GetDailyProgress(ctx, oid, today)
@@ -61,12 +64,10 @@ func (s *service) TrackActivity(ctx context.Context, userID string, activity Act
 	}
 	
 	if activity == ActivityReview || activity == ActivityQuiz {
-		dp.ReviewsCompleted++
-		if isCorrect {
-			dp.CorrectReviews++
-		}
+		dp.ReviewsCompleted += count
+		dp.CorrectReviews += correctCount
 	} else if activity == ActivityLearnNew {
-		dp.NewWordsLearned++
+		dp.NewWordsLearned += count
 	}
 
 	// Check for Daily Goal Bonus

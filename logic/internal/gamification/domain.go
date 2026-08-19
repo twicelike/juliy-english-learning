@@ -136,7 +136,7 @@ type Repository interface {
 
 type Service interface {
 	// Facade method for tracking all user actions
-	TrackActivity(ctx context.Context, userID string, activity ActivityType, isCorrect bool, dailyGoal int) error
+	TrackActivity(ctx context.Context, userID string, activity ActivityType, count int, correctCount int, customXP int, dailyGoal int) error
 	TrackWritingMission(ctx context.Context, userID string, score int) error
 	TrackSpeakingSession(ctx context.Context, userID string, score int) error
 	

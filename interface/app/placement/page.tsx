@@ -26,21 +26,23 @@ export default function PlacementTestPage() {
   }, []);
 
   const handleSelectOption = (questionId: string, option: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    const newAnswers = { ...answers, [questionId]: option };
+    setAnswers(newAnswers);
+
+    // Auto-advance after a short delay for visual feedback
+    setTimeout(() => {
+      if (currentIndex < questions.length - 1) {
+        setCurrentIndex((prev) => prev + 1);
+      } else {
+        submitTest(newAnswers);
+      }
+    }, 350);
   };
 
-  const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      handleSubmit();
-    }
-  };
-
-  const handleSubmit = async () => {
+  const submitTest = async (finalAnswers: Record<string, string>) => {
     setSubmitting(true);
     try {
-      const resp = await ProfileAPI.submitPlacementTest({ answers });
+      const resp = await ProfileAPI.submitPlacementTest({ answers: finalAnswers });
       setResult(resp);
     } catch (err) {
       console.error("Failed to submit", err);
@@ -64,16 +66,13 @@ export default function PlacementTestPage() {
           <div className="text-6xl mb-4">🎉</div>
           <h1 className="text-3xl font-bold font-display">Assessment Complete!</h1>
           <p className="text-white/70">
-            You scored {result.score} / 15. Based on this, your estimated level is:
+            You scored {result.score} / 15. Your learning baseline has been successfully updated.
           </p>
-          <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-            {result.cefr}
-          </div>
           <button
-            onClick={() => router.push("/learn")}
+            onClick={() => router.push("/profile")}
             className="w-full mt-8 bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-4 rounded-2xl transition-all"
           >
-            Start Your Roadmap
+            Back to Dashboard
           </button>
         </div>
       </div>
@@ -117,25 +116,25 @@ export default function PlacementTestPage() {
             <button
               key={opt}
               onClick={() => handleSelectOption(currentQ.id, opt)}
+              disabled={submitting || (currentAnswer !== undefined && currentAnswer !== opt)}
               className={`w-full text-left px-6 py-4 rounded-2xl border-2 transition-all ${
                 isSelected
                   ? "border-indigo-500 bg-indigo-500/10 text-white"
                   : "border-white/10 hover:border-white/20 text-white/80"
-              }`}
+              } ${submitting || (currentAnswer !== undefined && currentAnswer !== opt) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {opt}
             </button>
           );
         })}
       </div>
-
-      <button
-        onClick={handleNext}
-        disabled={!currentAnswer || submitting}
-        className="w-full mt-8 bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium py-4 rounded-2xl transition-all"
-      >
-        {submitting ? "Evaluating..." : isLast ? "Finish Assessment" : "Next Question"}
-      </button>
+      
+      {/* Optional: Add a subtle loading indicator when submitting the final answers */}
+      {submitting && (
+        <div className="mt-8 text-center text-indigo-400 animate-pulse text-sm font-medium tracking-wide">
+          Evaluating your answers...
+        </div>
+      )}
     </div>
   );
 }

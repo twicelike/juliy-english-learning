@@ -1,0 +1,72 @@
+/* Phase 01: Sketch Theme Tokens */
+
+[data-theme="sketch"] {
+  /* --- Background --- */
+  --background: #faf8f2;        /* Paper off-white */
+  --background-subtle: #f5f2e8; /* Trang vang nhe hon */
+  --background-ink: #fffdf8;    /* Card surface */
+
+  /* --- Foreground / Ink --- */
+  --foreground: #8B5E3C;        /* Brown ink */
+  --theme-white: var(--foreground); /* Force all text-white to use brown ink */
+  --foreground-muted: #A67C52;  /* Faded brown ink */
+  --foreground-faint: #C19A6B;  /* Light brown ink */
+
+  /* --- Primary Accent --- */
+  --primary: #4f46e5;           /* Indigo */
+  --primary-soft: #eef0ff;      /* Indigo wash */
+  --primary-hover: #4338ca;     /* Darker indigo */
+
+  /* --- Semantic --- */
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --danger: #dc2626;
+  --info: #2563eb;
+
+  /* --- Surface --- */
+  --card: #fffdf8;
+  --card-hover: #faf7ef;
+  --input-bg: #fdfcf8;
+
+  /* --- Border --- */
+  --border-color: #292724;
+  --border-width: 1.5px;
+  --border-muted: #c4bfb4;
+
+  /* --- Sketch shadow: hard offset, no blur --- */
+  --shadow-sketch-sm: 2px 2px 0px var(--border-color);
+  --shadow-sketch-md: 3px 3px 0px var(--border-color);
+  --shadow-sketch-lg: 4px 4px 0px var(--border-color);
+
+  /* --- Soft shadow fallback --- */
+  --shadow-soft: 0 2px 8px rgba(41, 39, 36, 0.08);
+
+  /* --- Border Radius --- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 9999px;
+
+  /* "Irregular" radius gia lap hand-drawn feel */
+  --radius-sketch: 8px 10px 9px 11px / 10px 8px 11px 9px;
+
+  /* --- Typography --- */
+  --font-body: 'Inter', 'Geist', system-ui, sans-serif;
+  --font-heading: 'Nunito', 'Plus Jakarta Sans', sans-serif;
+  --font-handwritten: 'Caveat', 'Patrick Hand', cursive;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* --- Base Overrides (applied to body when theme is active) --- */
+}
+
+html[data-theme="sketch"] body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+html[data-theme="sketch"] * {
+  border-color: var(--border-color);
+}

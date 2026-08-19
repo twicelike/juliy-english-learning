@@ -64,6 +64,9 @@ function SessionRunner() {
           return;
         }
 
+        // Initial shuffle for flashcards
+        s.items = [...s.items].sort(() => Math.random() - 0.5);
+
         setSession(s);
 
         const initRes: Record<string, WordResult> = {};
@@ -205,6 +208,7 @@ function SessionRunner() {
     if (currentIndex + 1 >= items.length) {
       setCurrentIndex(0);
       setPhase("mcq");
+      setSession(prev => prev ? { ...prev, items: [...prev.items].sort(() => Math.random() - 0.5) } : prev);
     } else {
       setCurrentIndex(i => i + 1);
     }
@@ -229,6 +233,7 @@ function SessionRunner() {
     if (currentIndex + 1 >= items.length) {
       setCurrentIndex(0);
       setPhase("fill_blank");
+      setSession(prev => prev ? { ...prev, items: [...prev.items].sort(() => Math.random() - 0.5) } : prev);
     } else {
       setCurrentIndex(i => i + 1);
     }

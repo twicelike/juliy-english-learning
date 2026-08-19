@@ -11,6 +11,46 @@ import (
 // Domain Models (DB Structs)
 // -----------------------------------------------------------------------------
 
+type Skill string
+
+const (
+	SkillVocabulary Skill = "vocabulary"
+	SkillGrammar    Skill = "grammar"
+	SkillReading    Skill = "reading"
+	SkillWriting    Skill = "writing"
+	SkillListening  Skill = "listening"
+	SkillSpeaking   Skill = "speaking"
+)
+
+type SkillLevel string
+
+const (
+	SkillLevelWeak    SkillLevel = "weak"
+	SkillLevelAverage SkillLevel = "average"
+	SkillLevelStrong  SkillLevel = "strong"
+)
+
+type SkillTrend string
+
+const (
+	SkillTrendImproving     SkillTrend = "improving"
+	SkillTrendStable        SkillTrend = "stable"
+	SkillTrendDeclining     SkillTrend = "declining"
+	SkillTrendInsufficient  SkillTrend = "insufficient_data"
+)
+
+type SkillAssessment struct {
+	Skill           Skill      `bson:"skill" json:"skill"`
+	Score           float64    `bson:"score" json:"score"`
+	Level           SkillLevel `bson:"level" json:"level"`
+	Confidence      float64    `bson:"confidence" json:"confidence"`
+	EvidenceCount   int        `bson:"evidence_count" json:"evidence_count"`
+	LastEvaluatedAt time.Time  `bson:"last_evaluated_at" json:"last_evaluated_at"`
+	Trend           SkillTrend `bson:"trend" json:"trend"`
+}
+
+
+
 // UserProfile represents the personalized learning state and settings of a user.
 type UserProfile struct {
 	ID                 bson.ObjectID `bson:"_id,omitempty"`
@@ -20,10 +60,13 @@ type UserProfile struct {
 	DailyGoal          int           `bson:"daily_goal"`
 	CompletedPlacement bool          `bson:"completed_placement"`
 	LastAssessmentAt   time.Time     `bson:"last_assessment_at"`
-	Strengths          []string      `bson:"strengths"`  // E.g. ["Business", "Noun"]
-	Weaknesses         []string      `bson:"weaknesses"` // E.g. ["Technology", "Verb"]
-	CreatedAt          time.Time     `bson:"created_at"`
-	UpdatedAt          time.Time     `bson:"updated_at"`
+	Strengths          []string          `bson:"strengths"`  // E.g. ["Business", "Noun"] (Legacy)
+	Weaknesses         []string          `bson:"weaknesses"` // E.g. ["Technology", "Verb"] (Legacy)
+	Skills             []SkillAssessment `bson:"skills"`
+	Goals              []string          `bson:"goals"`
+	FocusAreas         []string          `bson:"focus_areas"`
+	CreatedAt          time.Time         `bson:"created_at"`
+	UpdatedAt          time.Time         `bson:"updated_at"`
 }
 
 // -----------------------------------------------------------------------------
@@ -34,9 +77,13 @@ type UserProfile struct {
 type UserProfileDTO struct {
 	CurrentCEFR        string   `json:"current_cefr"`
 	DailyGoal          int      `json:"daily_goal"`
-	CompletedPlacement bool     `json:"completed_placement"`
-	Strengths          []string `json:"strengths"`
-	Weaknesses         []string `json:"weaknesses"`
+	CompletedPlacement  bool              `json:"completed_placement"`
+	LastAssessmentAt   *time.Time         `json:"last_assessment_at,omitempty"`
+	Strengths          []string           `json:"strengths"`  // Deprecated: use Skills instead
+	Weaknesses         []string           `json:"weaknesses"` // Deprecated: use Skills instead
+	Skills             []SkillAssessment  `json:"skills"`
+	Goals              []string          `json:"goals"`
+	FocusAreas         []string          `json:"focus_areas"`
 }
 
 // RecommendationAction defines what type of action the UI should render.
@@ -46,6 +93,7 @@ const (
 	ActionReview    RecommendationAction = "review"
 	ActionLearnNew  RecommendationAction = "learn_new"
 	ActionGrammar   RecommendationAction = "grammar"
+	ActionWriting   RecommendationAction = "writing"
 	ActionFillBlank RecommendationAction = "fill_blank"
 	ActionDone      RecommendationAction = "done" // Daily goal met, no immediate action needed
 )
@@ -123,6 +171,11 @@ type SubmitTestResponse struct {
 	CEFR  string `json:"cefr"`
 }
 
+type UpdatePreferencesRequest struct {
+	Goals      []string `json:"goals"`
+	FocusAreas []string `json:"focus_areas"`
+}
+
 // -----------------------------------------------------------------------------
 // Interfaces
 // -----------------------------------------------------------------------------
@@ -138,4 +191,6 @@ type Service interface {
 	GetDashboard(ctx context.Context, userID string) (*DashboardResponse, error)
 	GetPlacementTest(ctx context.Context) (*PlacementTestResponse, error)
 	SubmitPlacementTest(ctx context.Context, userID string, req *SubmitTestRequest) (*SubmitTestResponse, error)
+	UpdatePreferences(ctx context.Context, userID string, req *UpdatePreferencesRequest) error
+	RefreshSkills(ctx context.Context, userID string) error
 }

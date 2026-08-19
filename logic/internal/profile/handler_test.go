@@ -61,7 +61,7 @@ func TestGetDashboard_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 
-	handler := NewHandler(&mockService{})
+	handler := NewHandler(&mockService{}, nil)
 
 	// Simulate auth middleware setting user_id
 	router.Use(func(c *gin.Context) {

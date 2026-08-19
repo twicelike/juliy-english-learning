@@ -141,16 +141,22 @@ var placementTestQuestions = []internalPlacementQuestion{
 
 // evaluateTest maps a score out of 15 to a CEFR level.
 // 0-3 (A1), 4-6 (A2), 7-9 (B1), 10-12 (B2), 13-14 (C1), 15 (C2)
-func evaluateTest(answers map[string]string) (score int, cefr string, strengths, weaknesses []string) {
-	topicScores := make(map[string]int)
-	topicMax := make(map[string]int)
+func evaluateTest(answers map[string]string) (score int, cefr string, skillScores map[string]int, skillMax map[string]int) {
+	skillScores = make(map[string]int)
+	skillMax = make(map[string]int)
 
 	for _, q := range placementTestQuestions {
-		topicMax[q.Topic]++
+		// Map question ID to a specific skill
+		skill := SkillVocabulary
+		if q.ID[0] == 'g' {
+			skill = SkillGrammar
+		}
+
+		skillMax[string(skill)]++
 		userAnswer, ok := answers[q.ID]
 		if ok && userAnswer == q.CorrectAnswer {
 			score++
-			topicScores[q.Topic]++
+			skillScores[string(skill)]++
 		}
 	}
 
@@ -170,27 +176,5 @@ func evaluateTest(answers map[string]string) (score int, cefr string, strengths,
 		cefr = "C2"
 	}
 
-	// Calculate strengths and weaknesses based on topic accuracy
-	for topic, max := range topicMax {
-		correct := topicScores[topic]
-		ratio := float64(correct) / float64(max)
-
-		// Very simplistic tag logic: if they got > 50% right in a topic, it's a strength.
-		// If they got <= 50%, it's a weakness.
-		if ratio > 0.5 {
-			strengths = append(strengths, topic)
-		} else {
-			weaknesses = append(weaknesses, topic)
-		}
-	}
-
-	// Ensure we don't return nil slices
-	if strengths == nil {
-		strengths = []string{}
-	}
-	if weaknesses == nil {
-		weaknesses = []string{}
-	}
-
-	return score, cefr, strengths, weaknesses
+	return score, cefr, skillScores, skillMax
 }

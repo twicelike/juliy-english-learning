@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/english/backend/internal/dictionary"
+	"github.com/english/backend/internal/evaluation"
+	"github.com/english/backend/internal/events"
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/user"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -26,9 +28,11 @@ type service struct {
 	gamiSvc   gamification.Service
 	exSvc     ExerciseContentService
 	enricher  SessionEnricher
+	evalSvc   evaluation.Service
+	publisher events.Publisher
 }
 
-func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service, exSvc ExerciseContentService, enricher SessionEnricher) Service {
+func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.Repository, scheduler Scheduler, gamiSvc gamification.Service, exSvc ExerciseContentService, enricher SessionEnricher, evalSvc evaluation.Service, publisher events.Publisher) Service {
 	return &service{
 		repo:      repo,
 		dictRepo:  dictRepo,
@@ -37,6 +41,8 @@ func NewService(repo Repository, dictRepo dictionary.Repository, userRepo user.R
 		gamiSvc:   gamiSvc,
 		exSvc:     exSvc,
 		enricher:  enricher,
+		evalSvc:   evalSvc,
+		publisher: publisher,
 	}
 }
 
@@ -658,6 +664,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 	now := time.Now().UTC()
 	var progresses []*LearningProgress
 	var reviews []*Review
+	var evidences []*evaluation.Evidence
 	totalXP := 0
 	
 	// Pre-fetch all progresses for these words to update them
@@ -671,6 +678,24 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 		return err
 	}
 
+	// Helper to map Quality to Score
+	qualityToScore := func(q int) float64 {
+		switch q {
+		case 1:
+			return 0
+		case 2:
+			return 25 // Just in case, though usually 1,3,4,5
+		case 3:
+			return 50
+		case 4:
+			return 75
+		case 5:
+			return 100
+		default:
+			return 0
+		}
+	}
+
 	// 3. Process each result
 	for _, res := range req.Results {
 		wid, err := bson.ObjectIDFromHex(res.WordID)
@@ -678,7 +703,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 			continue
 		}
 
-		// A. Evaluate Evidence
+		// A. Evaluate Evidence (for SRS scheduling)
 		assessment := EvaluateLearningEvidence(res)
 		
 		// B. Retrieve or create Progress
@@ -718,9 +743,57 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 		reviews = append(reviews, rev)
 
 		// E. Gamification points:
-		// Example: 10 XP per word learned/reviewed correctly
 		if quality >= QualityHard {
 			totalXP += 10
+		}
+
+		// F. Emit Evidences for Dynamic Evaluation
+		// 1. Flashcard
+		evidences = append(evidences, &evaluation.Evidence{
+			UserID:     uid,
+			EventID:    fmt.Sprintf("%s:%s:fc", sessionID, res.WordID),
+			Skill:      "vocabulary", // From profile.SkillVocabulary
+			Score:      qualityToScore(res.FlashcardQuality),
+			Weight:     evaluation.WeightReview,
+			Source:     evaluation.SourceLearningSession,
+			Metadata:   bson.M{"exercise_type": "flashcard", "word_id": res.WordID, "session_id": sessionID, "quality": res.FlashcardQuality},
+			OccurredAt: now,
+		})
+
+		// 2. MCQ
+		if res.MultipleChoiceCorrect != nil {
+			score := 0.0
+			if *res.MultipleChoiceCorrect {
+				score = 100.0
+			}
+			evidences = append(evidences, &evaluation.Evidence{
+				UserID:     uid,
+				EventID:    fmt.Sprintf("%s:%s:mcq", sessionID, res.WordID),
+				Skill:      "vocabulary",
+				Score:      score,
+				Weight:     evaluation.WeightReview,
+				Source:     evaluation.SourceLearningSession,
+				Metadata:   bson.M{"exercise_type": "mcq", "word_id": res.WordID, "session_id": sessionID, "correct": *res.MultipleChoiceCorrect},
+				OccurredAt: now,
+			})
+		}
+
+		// 3. Fill Blank (Temporary assigned to Vocabulary per plan)
+		if res.FillBlankCorrect != nil {
+			score := 0.0
+			if *res.FillBlankCorrect {
+				score = 100.0
+			}
+			evidences = append(evidences, &evaluation.Evidence{
+				UserID:     uid,
+				EventID:    fmt.Sprintf("%s:%s:fb", sessionID, res.WordID),
+				Skill:      "vocabulary",
+				Score:      score,
+				Weight:     evaluation.WeightReview,
+				Source:     evaluation.SourceLearningSession,
+				Metadata:   bson.M{"exercise_type": "fill_blank", "word_id": res.WordID, "session_id": sessionID, "correct": *res.FillBlankCorrect},
+				OccurredAt: now,
+			})
 		}
 	}
 
@@ -730,11 +803,41 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 		return err
 	}
 
+	// Async save evidences
+	if s.evalSvc != nil && len(evidences) > 0 {
+		go func(evs []*evaluation.Evidence) {
+			bgCtx := context.Background()
+			_ = s.evalSvc.RecordEvidences(bgCtx, evs)
+			
+			// Publish profile refresh event after evidences are recorded
+			if s.publisher != nil {
+				_ = s.publisher.Publish(bgCtx, events.Event{
+					Type:   events.EventTypeProfileRefreshRequested,
+					UserID: userID,
+					Reason: "learning_session_completed",
+				})
+			}
+		}(evidences)
+	}
+
 	// 5. Update Gamification async
-	if s.gamiSvc != nil && totalXP > 0 {
+	if s.gamiSvc != nil {
 		go func() {
 			bgCtx := context.Background()
-			_ = s.gamiSvc.TrackActivity(bgCtx, userID, gamification.ActivityReview, true, totalXP)
+			
+			activity := gamification.ActivityReview
+			if session.Mode == "new_words" {
+				activity = gamification.ActivityLearnNew
+			}
+			
+			correctCount := 0
+			for _, r := range req.Results {
+				if r.FlashcardQuality >= 3 {
+					correctCount++
+				}
+			}
+			
+			_ = s.gamiSvc.TrackActivity(bgCtx, userID, activity, len(req.Results), correctCount, totalXP, 20)
 		}()
 	}
 

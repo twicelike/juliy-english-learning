@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useAuthStore } from "@/features/auth";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function Navbar() {
   const { user } = useAuthStore();
+  const { theme, setTheme, mounted } = useTheme();
 
   return (
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-md">
@@ -12,7 +14,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <span className="text-2xl">📖</span>
-          <span className="font-bold text-white tracking-tight text-lg group-hover:text-indigo-300 transition-colors">
+          <span className="font-bold tracking-tight text-lg group-hover:text-indigo-300 transition-colors">
             JULIY
           </span>
         </Link>
@@ -21,23 +23,31 @@ export default function Navbar() {
 
         {/* CTA */}
         <div className="flex items-center gap-4">
+          {mounted && (
+            <button
+              onClick={() => setTheme(theme === 'default' ? 'sketch' : 'default')}
+              className="text-xs px-2 py-1 bg-white/10 rounded"
+            >
+              {theme === 'default' ? '🎨 Sketch' : '🌙 Dark'}
+            </button>
+          )}
           {user ? (
             <>
-              <Link href="/learn" className="text-sm text-white/70 hover:text-white transition-colors">
+              <Link href="/learn" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 Study
               </Link>
-              <Link href="/speaking" className="text-sm text-white/70 hover:text-white transition-colors">
+              <Link href="/speaking" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 Speaking
               </Link>
-              <Link href="/word-sets/explore" className="text-sm text-white/70 hover:text-white transition-colors">
+              <Link href="/word-sets/explore" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 Explore
               </Link>
-              <Link href="/word-sets" className="text-sm text-white/70 hover:text-white transition-colors">
+              <Link href="/word-sets" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 My Sets
               </Link>
               <Link
                 href="/profile"
-                className="px-4 py-2 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-white/10 hover:bg-white/20 rounded-full transition-colors"
               >
                 Profile
               </Link>
@@ -45,7 +55,7 @@ export default function Navbar() {
           ) : (
             <Link
               href="/login"
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-indigo-500 hover:bg-indigo-600 rounded-full transition-colors text-white"
             >
               Sign In
             </Link>

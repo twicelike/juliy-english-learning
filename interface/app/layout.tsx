@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import "../themes/sketch/tokens.css";
+import "../themes/sketch/components.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
@@ -13,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 import { AuthProvider } from "@/features/auth";
-
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 export default function RootLayout({
   children,
 }: {
@@ -21,12 +23,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={geist.variable}>
-      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col" style={{ backgroundColor: "#0a0a12", color: "#ffffff" }}>
-        <AuthProvider>
-          <Navbar />
-          <main className="flex-1 pt-16">{children}</main>
-          <Footer />
-        </AuthProvider>
+      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col transition-colors duration-300">
+        <ThemeProvider>
+          <AuthProvider>
+            <Navbar />
+            <main className="flex-1 pt-16">{children}</main>
+            <Footer />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

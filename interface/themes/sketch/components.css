@@ -1,0 +1,126 @@
+/* Phase 03: Sketch Theme Component Overrides */
+
+/* --- Button --- */
+[data-theme="sketch"] .btn {
+  border: 2px solid var(--foreground);
+  border-radius: var(--radius-sketch);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+[data-theme="sketch"] .btn-primary {
+  background: var(--primary);
+  color: white;
+  box-shadow: 3px 3px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn-primary:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn-primary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn-secondary {
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: 2px 2px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn-secondary:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn-secondary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--foreground);
+}
+
+[data-theme="sketch"] .btn:focus-visible {
+  outline: 2px dashed var(--primary);
+  outline-offset: 4px;
+}
+
+
+/* --- Card --- */
+[data-theme="sketch"] .card {
+  background: var(--card);
+  border: 2px solid var(--foreground);
+  border-radius: var(--radius-sketch);
+  box-shadow: 4px 4px 0 var(--foreground);
+  transition: transform var(--transition-base, 200ms ease), box-shadow var(--transition-base, 200ms ease);
+}
+
+[data-theme="sketch"] .card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--foreground);
+}
+
+
+/* --- Input --- */
+[data-theme="sketch"] .input {
+  background: var(--input-bg);
+  border: 2px solid var(--border-muted);
+  border-radius: var(--radius-sketch);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+[data-theme="sketch"] .input:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 2px 2px 0 var(--primary);
+}
+
+[data-theme="sketch"] .input::placeholder {
+  color: var(--foreground-faint);
+  font-style: italic;
+}
+
+
+/* --- Badge --- */
+[data-theme="sketch"] .badge {
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-theme="sketch"] .badge-primary {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+[data-theme="sketch"] .badge-new::before {
+  content: "✦ ";
+}
+
+
+/* --- Progress --- */
+[data-theme="sketch"] .progress-track {
+  background: var(--background-subtle);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+[data-theme="sketch"] .progress-fill {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--primary),
+    var(--primary) 6px,
+    color-mix(in srgb, var(--primary), transparent 20%) 6px,
+    color-mix(in srgb, var(--primary), transparent 20%) 9px
+  );
+  border-radius: var(--radius-sm);
+  transition: width 300ms ease;
+}

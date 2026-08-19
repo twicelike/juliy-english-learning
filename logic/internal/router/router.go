@@ -14,6 +14,8 @@ import (
 	"github.com/english/backend/internal/config"
 	"github.com/english/backend/internal/dictionary"
 	"github.com/english/backend/internal/enricher"
+	"github.com/english/backend/internal/evaluation"
+	"github.com/english/backend/internal/events"
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/handler"
 	"github.com/english/backend/internal/learning"
@@ -224,6 +226,14 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			wordSetRoutes.PATCH("/:id/words/:wordId/annotation", wordSetHandler.UpdateAnnotation)
 		}
 
+		// Evaluation
+		evalRepo := evaluation.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = evalRepo.EnsureIndexes(ctx)
+		evalService := evaluation.NewService(evalRepo)
+
+		// Event Publisher
+		publisher := events.NewInProcessPublisher(100)
+
 		if rawAI != nil && errAI == nil {
 			aiCache := ai.NewMemoryCache()
 			aiLimiter := ai.NewMemoryRateLimiter(cfg.AIRateLimit)
@@ -238,7 +248,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			if err != nil {
 				panic(fmt.Errorf("failed to initialize local storage: %w", err))
 			}
-			processorSvc := speaking.NewProcessingService(speakingRepo, aiService, storageSvc, dictRepo, gamiService)
+			processorSvc := speaking.NewProcessingService(speakingRepo, aiService, storageSvc, dictRepo, gamiService, evalService, publisher)
 			speakingService := speaking.NewService(speakingRepo, aiService, storageSvc, processorSvc)
 			recService := speaking.NewRecommendationService(speakingRepo, speakingService)
 			speakingHandler := speaking.NewHandler(speakingService, recService)
@@ -257,9 +267,10 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			exSvc = learning.NewExerciseContentService(exerciseContentRepo, dictRepo, rawAI)
 		}
 
-		
+
+
 		sessionEnrich := enricher.NewSessionEnricher(translationService, wordSetService)
-		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc, sessionEnrich)
+		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc, sessionEnrich, evalService, publisher)
 		learnHandler := learning.NewHandler(learnService)
 
 		learnRoutes := v1.Group("/learning")
@@ -285,7 +296,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			// AI is only used for evaluating answers.
 		}
 
-		writingService := writing.NewService(writingRepo, writingEvaluator, gamiService)
+		writingService := writing.NewService(writingRepo, writingEvaluator, gamiService, evalService, publisher)
 		writingHandler := writing.NewHandler(writingService)
 
 		writingRoutes := v1.Group("/writing")
@@ -304,8 +315,12 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		// Profile (Adaptive Learning)
 		profileRepo := profile.NewRepository(mongoClient.Database(cfg.MongoDB))
 		_ = profileRepo.EnsureIndexes(ctx)
-		profileService := profile.NewService(profileRepo, learnService, rawAI, gamiService) // rawAI could be nil, handled gracefully
-		profileHandler := profile.NewHandler(profileService)
+		profileService := profile.NewService(profileRepo, learnService, rawAI, gamiService, evalService) // rawAI could be nil, handled gracefully
+		profileHandler := profile.NewHandler(profileService, publisher)
+
+		// Set profile handler to publisher and start worker
+		publisher.SetProfileHandler(profileService)
+		publisher.StartWorker(ctx)
 
 		profileRoutes := v1.Group("/profile")
 		profileRoutes.Use(middleware.RequireAuth(authRepo))
@@ -313,7 +328,11 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			profileRoutes.GET("", profileHandler.GetDashboard)
 			profileRoutes.GET("/placement-test", profileHandler.GetPlacementTest)
 			profileRoutes.POST("/placement-test", profileHandler.SubmitPlacementTest)
+			profileRoutes.PATCH("/preferences", profileHandler.UpdatePreferences)
 		}
+
+		// Also register the manual refresh endpoint under /users/me
+		userRoutes.POST("/me/refresh-skills", profileHandler.RequestRefreshSkills())
 
 		// Gamification Routes
 		gamiHandler := gamification.NewHandler(gamiService)

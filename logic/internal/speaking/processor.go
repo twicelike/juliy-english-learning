@@ -9,6 +9,8 @@ import (
 
 	"github.com/english/backend/internal/ai"
 	"github.com/english/backend/internal/dictionary"
+	"github.com/english/backend/internal/evaluation"
+	"github.com/english/backend/internal/events"
 	"github.com/english/backend/internal/gamification"
 	"github.com/english/backend/internal/storage"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -20,15 +22,19 @@ type processingService struct {
 	storage   storage.StorageService
 	dictRepo  dictionary.Repository
 	gamiSvc   gamification.Service
+	evalSvc   evaluation.Service
+	publisher events.Publisher
 }
 
-func NewProcessingService(repo Repository, aiService ai.AITutorService, storage storage.StorageService, dictRepo dictionary.Repository, gamiSvc gamification.Service) ProcessingService {
+func NewProcessingService(repo Repository, aiService ai.AITutorService, storage storage.StorageService, dictRepo dictionary.Repository, gamiSvc gamification.Service, evalSvc evaluation.Service, publisher events.Publisher) ProcessingService {
 	return &processingService{
 		repo:      repo,
 		aiService: aiService,
 		storage:   storage,
 		dictRepo:  dictRepo,
 		gamiSvc:   gamiSvc,
+		evalSvc:   evalSvc,
+		publisher: publisher,
 	}
 }
 
@@ -136,6 +142,35 @@ func (s *processingService) ProcessAttempt(ctx context.Context, attemptIDStr str
 			slog.Error("ProcessAttempt failed to track gamification", "error", err, "attemptID", attemptIDStr)
 			// Do not return error here so that speaking evaluation remains successful
 		}
+	}
+
+	// Publish Evidence to Evaluation Engine
+	if s.evalSvc != nil {
+		ev := &evaluation.Evidence{
+			UserID:     attempt.UserID,
+			EventID:    attempt.ID.Hex(),
+			Skill:      "speaking",
+			Score:      float64(attempt.Evaluation.Overall),
+			Weight:     evaluation.WeightSpeaking,
+			Source:     evaluation.SourceSpeakingLab,
+			Metadata:   bson.M{"session_id": attempt.SessionID.Hex()},
+		}
+		
+		// Run in background to avoid blocking
+		go func(e *evaluation.Evidence, uid string) {
+			bgCtx := context.Background()
+			if err := s.evalSvc.RecordEvidence(bgCtx, e); err != nil {
+				slog.Error("ProcessAttempt failed to record evaluation evidence", "error", err, "attemptID", attemptIDStr)
+			}
+			
+			if s.publisher != nil {
+				_ = s.publisher.Publish(bgCtx, events.Event{
+					Type:   events.EventTypeProfileRefreshRequested,
+					UserID: uid,
+					Reason: "speaking_session_completed",
+				})
+			}
+		}(ev, attempt.UserID.Hex())
 	}
 
 	slog.Info("ProcessAttempt completed successfully", "attemptID", attemptIDStr, "score", resp.Score)

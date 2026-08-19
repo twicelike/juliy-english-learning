@@ -81,7 +81,7 @@ func TestTrackActivity_XPAndStreak(t *testing.T) {
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 1. Initial Review (New day, 0 to 1 streak)
-	err := svc.TrackActivity(ctx, userID, ActivityReview, true, 0)
+	err := svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestTrackActivity_XPAndStreak(t *testing.T) {
 	}
 
 	// 2. Second review on the same day (Streak remains 1)
-	err = svc.TrackActivity(ctx, userID, ActivityLearnNew, true, 0)
+	err = svc.TrackActivity(ctx, userID, ActivityLearnNew, 1, 1, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestTrackActivity_XPAndStreak(t *testing.T) {
 	repo.Stats.CurrentStreak = 5
 	repo.Stats.LongestStreak = 5
 
-	err = svc.TrackActivity(ctx, userID, ActivityQuiz, false, 0)
+	err = svc.TrackActivity(ctx, userID, ActivityQuiz, 1, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestTrackActivity_XPAndStreak(t *testing.T) {
 	// 4. Manipulate to yesterday to see if it increments to 2
 	repo.Stats.LastActivityDate = yesterday
 	repo.Stats.CurrentStreak = 1
-	err = svc.TrackActivity(ctx, userID, ActivityReview, true, 0)
+	err = svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,18 +176,17 @@ func TestTrackActivity_DailyGoalBonus(t *testing.T) {
 
 	// Set daily goal to 3
 	dailyGoal := 3
-
 	// 1st action -> no bonus
-	_ = svc.TrackActivity(ctx, userID, ActivityReview, true, dailyGoal)
+	_ = svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, dailyGoal)
 	if repo.Stats.TotalXP != ActivityReview.XP() {
 		t.Errorf("expected %d, got %d", ActivityReview.XP(), repo.Stats.TotalXP)
 	}
 
 	// 2nd action -> no bonus
-	_ = svc.TrackActivity(ctx, userID, ActivityReview, true, dailyGoal)
+	_ = svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, dailyGoal)
 
 	// 3rd action -> meets goal -> gets bonus
-	_ = svc.TrackActivity(ctx, userID, ActivityReview, true, dailyGoal)
+	_ = svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, dailyGoal)
 
 	expectedXP := ActivityReview.XP()*3 + ActivityDaily.XP()
 	if repo.Stats.TotalXP != expectedXP {
@@ -198,7 +197,7 @@ func TestTrackActivity_DailyGoalBonus(t *testing.T) {
 	}
 
 	// 4th action -> goal already met -> no extra bonus
-	_ = svc.TrackActivity(ctx, userID, ActivityReview, true, dailyGoal)
+	_ = svc.TrackActivity(ctx, userID, ActivityReview, 1, 1, 0, dailyGoal)
 	expectedXP += ActivityReview.XP() // only normal review XP
 	if repo.Stats.TotalXP != expectedXP {
 		t.Errorf("expected XP %d after exceeding goal, got %d", expectedXP, repo.Stats.TotalXP)

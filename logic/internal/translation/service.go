@@ -80,7 +80,7 @@ func (s *service) TranslateWord(ctx context.Context, input TranslateWordInput) (
 func (s *service) buildPrompt(input TranslateWordInput) string {
 	var meaningsStr strings.Builder
 	for i, m := range input.Meanings {
-		meaningsStr.WriteString(fmt.Sprintf("%d. %s\n", i+1, m))
+		meaningsStr.WriteString(fmt.Sprintf("%d. %s\n", i+1, m.Definition))
 	}
 
 	return fmt.Sprintf(`Word: %s
