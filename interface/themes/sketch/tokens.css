@@ -13,9 +13,9 @@
   --foreground-faint: #C19A6B;  /* Light brown ink */
 
   /* --- Primary Accent --- */
-  --primary: #4f46e5;           /* Indigo */
-  --primary-soft: #eef0ff;      /* Indigo wash */
-  --primary-hover: #4338ca;     /* Darker indigo */
+  --primary: #8B5E3C;           /* Brown ink for progress bars and active tabs */
+  --primary-soft: #f5f2e8;      /* Warm paper wash */
+  --primary-hover: #A67C52;     /* Darker brown ink */
 
   /* --- Semantic --- */
   --success: #16a34a;

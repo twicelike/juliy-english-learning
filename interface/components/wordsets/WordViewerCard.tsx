@@ -88,7 +88,7 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
         >
           {/* FRONT */}
           <div
-            className="absolute inset-0 rounded-3xl overflow-hidden flex flex-col items-center justify-center p-8 gap-4 border border-white/10 shadow-2xl bg-black/40"
+            className="flashcard-front absolute inset-0 rounded-3xl overflow-hidden flex flex-col items-center justify-center p-8 gap-4 border border-white/10 shadow-2xl bg-black/40"
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
@@ -122,7 +122,7 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
 
           {/* BACK */}
           <div
-            className="absolute inset-0 rounded-3xl overflow-hidden flex flex-col border border-indigo-500/30 shadow-2xl bg-black/60"
+            className="flashcard-back absolute inset-0 rounded-3xl overflow-hidden flex flex-col border border-indigo-500/30 shadow-2xl bg-black/60"
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",

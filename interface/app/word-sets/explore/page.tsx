@@ -127,7 +127,7 @@ export default function ExploreWordSetsPage() {
             </div>
             <button
               type="submit"
-              className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 font-semibold rounded-xl transition-colors text-white"
+              className="btn btn-primary px-6 py-3 bg-indigo-500 hover:bg-indigo-600 font-semibold rounded-xl transition-colors text-white"
             >
               Search
             </button>

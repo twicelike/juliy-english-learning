@@ -2,7 +2,8 @@
 
 import { WordSetListItem } from "@/lib/wordset-api";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   set: WordSetListItem;
@@ -15,12 +16,17 @@ interface Props {
 export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = "library" }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Visual fill bar (word_count as relative fill, 50 is a visual reference only)
   const barFill = Math.min(Math.round((set.word_count / 50) * 100), 100);
 
   return (
-    <div className="group relative flex flex-col rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.07] transition-all duration-200 shadow-sm overflow-hidden">
+    <div className="card group relative flex flex-col rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.07] transition-all duration-200 shadow-sm overflow-hidden">
       {/* Top accent bar by visibility */}
       <div
         className={`h-0.5 w-full ${set.visibility === "public" ? "bg-emerald-500/60" : "bg-indigo-500/40"}`}
@@ -30,8 +36,10 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
         {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg leading-snug truncate group-hover:text-indigo-500 transition-colors">
-              {set.name}
+            <h3 className="font-bold text-lg leading-snug truncate group-hover:text-indigo-400 transition-colors">
+              <Link href={`/word-sets/${set.id}`} className="after:absolute after:inset-0 focus:outline-none">
+                {set.name}
+              </Link>
             </h3>
             <div className="flex items-center gap-1.5 mt-1">
               {set.visibility === "private" ? (
@@ -55,8 +63,12 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
           {/* Eye Icon & 3-dot menu */}
           <div className="relative z-10 shrink-0 flex items-center gap-1">
             <button
-              onClick={() => setShowDetails(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center opacity-30 hover:opacity-100 hover:bg-white/10 transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowDetails(true);
+              }}
+              className="w-8 h-8 rounded-full flex items-center justify-center opacity-60 hover:opacity-100 hover:bg-white/10 transition-colors"
               title="View full details"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -67,8 +79,12 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
             {mode === "library" && (
               <div className="relative">
                 <button
-                  onClick={() => setShowMenu(!showMenu)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center opacity-30 hover:opacity-100 hover:bg-white/10 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMenu(!showMenu);
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center opacity-60 hover:opacity-100 hover:bg-white/10 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
@@ -79,14 +95,14 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
                     <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                     <div className="absolute right-0 mt-2 w-36 bg-white/5 border border-white/10 rounded-xl shadow-2xl z-20 py-1.5 overflow-hidden backdrop-blur-md">
                       <button
-                        onClick={() => { setShowMenu(false); if (onEdit) onEdit(set); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(false); if (onEdit) onEdit(set); }}
                         className="w-full text-left px-4 py-2 text-sm opacity-60 hover:opacity-100 hover:bg-white/5 transition-colors"
                       >
                         Edit Details
                       </button>
                       <div className="mx-3 my-1 h-px bg-white/10" />
                       <button
-                        onClick={() => { setShowMenu(false); if (onDelete) onDelete(set); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(false); if (onDelete) onDelete(set); }}
                         className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-400/5 transition-colors"
                       >
                         Delete
@@ -140,9 +156,9 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
               <span className="text-indigo-300/80 text-xs font-medium">{set.clone_count} learners</span>
             )}
           </div>
-          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+          <div className="progress-track h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
+              className="progress-fill h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
               style={{ width: `${barFill}%` }}
             />
           </div>
@@ -152,49 +168,48 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
         <p className="opacity-30 text-xs">Updated {formatRelativeTime(set.updated_at)}</p>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-1">
-          <Link
-            href={`/word-sets/${set.id}`}
-            className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold text-center transition-all shadow-sm shadow-indigo-500/20"
-          >
-            {mode === "explore" ? "View Set" : "Open Set"}
-          </Link>
-          {mode === "library" && (
+        {mode === "library" && (
+          <div className="flex justify-end pt-1">
             <Link
               href={`/word-sets/${set.id}/builder`}
-              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 opacity-60 hover:opacity-100 text-sm font-medium text-center transition-all"
+              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 opacity-80 hover:opacity-100 text-sm font-medium transition-all relative z-10 flex items-center gap-2"
               title="Open Builder"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
+              <span>Add Words</span>
             </Link>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}
-      {showDetails && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-6 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+      {mounted && showDetails && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDetails(false)}>
+          <div 
+            className="card no-hover bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setShowDetails(false)}
-              className="absolute top-5 right-5 opacity-40 hover:opacity-100 transition-opacity"
+              className="absolute top-5 right-5 opacity-40 hover:opacity-100 transition-opacity text-white"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <h2 className="text-2xl font-bold mb-4 pr-8 leading-tight break-all">{set.name}</h2>
+            <h2 className="text-2xl font-bold mb-4 pr-8 leading-tight break-all text-white">{set.name}</h2>
             {set.description ? (
-              <div className="opacity-80 whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 text-base break-all">
+              <div className="opacity-80 whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 text-base break-all text-white">
                 {set.description}
               </div>
             ) : (
-              <p className="opacity-30 italic">No description provided.</p>
+              <p className="opacity-30 italic text-white">No description provided.</p>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -35,7 +35,7 @@ export function Flashcard({ card, flipped, onFlip }: FlashcardProps) {
       >
         {/* FRONT */}
         <div
-          className="absolute inset-0 rounded-3xl overflow-hidden flex flex-col items-center justify-center p-8 gap-4 border border-white/10 shadow-2xl bg-black/40"
+          className="flashcard-front absolute inset-0 rounded-3xl overflow-hidden flex flex-col items-center justify-center p-8 gap-4 border border-white/10 shadow-2xl bg-black/40"
           style={{
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
@@ -70,7 +70,7 @@ export function Flashcard({ card, flipped, onFlip }: FlashcardProps) {
 
         {/* BACK */}
         <div
-          className="absolute inset-0 rounded-3xl overflow-hidden flex flex-col p-6 sm:p-8 border border-indigo-500/30 shadow-2xl custom-scrollbar overflow-y-auto bg-black/60"
+          className="flashcard-back absolute inset-0 rounded-3xl overflow-hidden flex flex-col p-6 sm:p-8 border border-indigo-500/30 shadow-2xl custom-scrollbar overflow-y-auto bg-black/60"
           style={{
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
@@ -88,15 +88,15 @@ export function Flashcard({ card, flipped, onFlip }: FlashcardProps) {
             )}
           </div>
 
-          <div className="flex-1 flex flex-col justify-center space-y-8">
+          <div className="flex-1 flex flex-col justify-center space-y-4">
             {/* Definitions */}
-            <div className="space-y-3">
-              <h4 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-2">Definitions</h4>
-              <ul className="space-y-4 mt-2">
-                {card.definitions.slice(0, 3).map((d, i) => (
-                  <li key={i} className="flex gap-4 text-white/90 text-base sm:text-lg leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">
+            <div className="space-y-2">
+              <h4 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-1">Definitions</h4>
+              <ul className="space-y-2 mt-1">
+                {card.definitions.slice(0, 2).map((d, i) => (
+                  <li key={i} className="flex gap-3 text-white/90 text-sm sm:text-base leading-snug bg-white/5 p-3 rounded-xl border border-white/5">
                     <span className="text-indigo-400 font-bold">{i + 1}.</span>
-                    <span>{d}</span>
+                    <span className="line-clamp-2">{d}</span>
                   </li>
                 ))}
               </ul>
@@ -104,8 +104,8 @@ export function Flashcard({ card, flipped, onFlip }: FlashcardProps) {
 
 
             {/* Translation & Annotations */}
-            <div className="pt-4 border-t border-white/10">
-              <h4 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">Translation</h4>
+            <div className="pt-3 border-t border-white/10">
+              <h4 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-2">Translation</h4>
 
               {card.annotation ? (
                 <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3 flex items-start gap-3">

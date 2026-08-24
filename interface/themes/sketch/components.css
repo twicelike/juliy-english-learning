@@ -9,20 +9,22 @@
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
-[data-theme="sketch"] .btn-primary {
-  background: var(--primary);
-  color: white;
-  box-shadow: 3px 3px 0 var(--foreground);
+[data-theme="sketch"] .btn-primary,
+[data-theme="sketch"] .card .btn.btn-primary {
+  background: var(--foreground) !important;
+  color: var(--background) !important;
+  box-shadow: 3px 3px 0 var(--foreground-muted) !important;
 }
 
 [data-theme="sketch"] .btn-primary:hover:not(:disabled) {
   transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--foreground);
+  box-shadow: 4px 4px 0 var(--foreground-muted) !important;
+  background: var(--foreground-muted) !important;
 }
 
 [data-theme="sketch"] .btn-primary:active:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--foreground);
+  box-shadow: 1px 1px 0 var(--foreground-muted) !important;
 }
 
 [data-theme="sketch"] .btn-secondary {
@@ -56,7 +58,7 @@
   transition: transform var(--transition-base, 200ms ease), box-shadow var(--transition-base, 200ms ease);
 }
 
-[data-theme="sketch"] .card:hover {
+[data-theme="sketch"] .card:hover:not(.no-hover) {
   transform: translate(-1px, -1px);
   box-shadow: 5px 5px 0 var(--foreground);
 }
@@ -123,4 +125,115 @@
   );
   border-radius: var(--radius-sm);
   transition: width 300ms ease;
+}
+
+/* --- Flashcard --- */
+[data-theme="sketch"] .flashcard-front,
+[data-theme="sketch"] .flashcard-back {
+  background: var(--card) !important;
+  border: 2px solid var(--foreground) !important;
+  box-shadow: 4px 4px 0 var(--foreground) !important;
+  border-radius: var(--radius-sketch) !important;
+}
+
+[data-theme="sketch"] .flashcard-back {
+  background: var(--background-ink) !important;
+}
+
+/* Cleanup text colors for sketch theme (remove white/indigo fixed colors) */
+[data-theme="sketch"] .flashcard-back .text-indigo-300,
+[data-theme="sketch"] .flashcard-back .text-indigo-400,
+[data-theme="sketch"] .flashcard-back .text-indigo-500,
+[data-theme="sketch"] .flashcard-front .text-indigo-300,
+[data-theme="sketch"] .flashcard-front .text-indigo-400,
+[data-theme="sketch"] .flashcard-front .text-indigo-500,
+[data-theme="sketch"] .card .text-indigo-300,
+[data-theme="sketch"] .card .text-indigo-400,
+[data-theme="sketch"] .card .text-indigo-500 {
+  color: var(--primary) !important;
+}
+
+[data-theme="sketch"] .flashcard-back .text-white\/30,
+[data-theme="sketch"] .flashcard-back .text-white\/40,
+[data-theme="sketch"] .flashcard-back .text-white\/50,
+[data-theme="sketch"] .flashcard-front .text-white\/30,
+[data-theme="sketch"] .flashcard-front .text-white\/40,
+[data-theme="sketch"] .flashcard-front .text-white\/50,
+[data-theme="sketch"] .card .text-white\/30,
+[data-theme="sketch"] .card .text-white\/40,
+[data-theme="sketch"] .card .text-white\/50 {
+  color: var(--foreground-muted) !important;
+}
+
+[data-theme="sketch"] .flashcard-back .text-white\/80,
+[data-theme="sketch"] .flashcard-back .text-white\/90,
+[data-theme="sketch"] .flashcard-back .text-white,
+[data-theme="sketch"] .flashcard-front .text-white\/80,
+[data-theme="sketch"] .flashcard-front .text-white\/90,
+[data-theme="sketch"] .flashcard-front .text-white,
+[data-theme="sketch"] .card .text-white\/80,
+[data-theme="sketch"] .card .text-white\/90,
+[data-theme="sketch"] .card .text-white {
+  color: var(--foreground) !important;
+}
+
+[data-theme="sketch"] .flashcard-back .bg-white\/5,
+[data-theme="sketch"] .flashcard-back .bg-indigo-500\/10,
+[data-theme="sketch"] .flashcard-back .bg-indigo-500\/20,
+[data-theme="sketch"] .flashcard-front .bg-white\/5,
+[data-theme="sketch"] .flashcard-front .bg-indigo-500\/10,
+[data-theme="sketch"] .flashcard-front .bg-indigo-500\/20,
+[data-theme="sketch"] .card .bg-white\/5,
+[data-theme="sketch"] .card .bg-indigo-500\/10,
+[data-theme="sketch"] .card .bg-indigo-500\/20 {
+  background: var(--background-subtle) !important;
+  border: 1px solid var(--border-muted) !important;
+  color: var(--foreground) !important;
+}
+
+[data-theme="sketch"] .tab-active {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+/* --- Global Hover Overrides for Indigo/Purple in Sketch Theme --- */
+[data-theme="sketch"] [class*="hover:text-indigo"]:hover,
+[data-theme="sketch"] [class*="hover:text-purple"]:hover,
+[data-theme="sketch"] .group:hover [class*="group-hover:text-indigo"],
+[data-theme="sketch"] .group:hover [class*="group-hover:text-purple"] {
+  color: var(--primary-hover) !important;
+}
+
+[data-theme="sketch"] [class*="hover:border-indigo"]:hover,
+[data-theme="sketch"] [class*="hover:border-purple"]:hover,
+[data-theme="sketch"] .group:hover [class*="group-hover:border-indigo"],
+[data-theme="sketch"] .group:hover [class*="group-hover:border-purple"] {
+  border-color: var(--primary-hover) !important;
+}
+
+/* Faint background hovers (e.g., hover:bg-indigo-500/10) */
+[data-theme="sketch"] [class*="hover:bg-indigo-500/"]:hover,
+[data-theme="sketch"] [class*="hover:bg-purple-500/"]:hover,
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-indigo-500/"],
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-purple-500/"] {
+  background-color: var(--background-subtle) !important;
+}
+
+/* Solid background hovers */
+[data-theme="sketch"] [class*="hover:bg-indigo-600"]:hover,
+[data-theme="sketch"] [class*="hover:bg-purple-600"]:hover,
+[data-theme="sketch"] [class*="hover:bg-indigo-500"]:not([class*="hover:bg-indigo-500/"]):hover,
+[data-theme="sketch"] [class*="hover:bg-purple-500"]:not([class*="hover:bg-purple-500/"]):hover,
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-indigo-600"],
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-purple-600"],
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-indigo-500"]:not([class*="group-hover:bg-indigo-500/"]),
+[data-theme="sketch"] .group:hover [class*="group-hover:bg-purple-500"]:not([class*="group-hover:bg-purple-500/"]) {
+  background-color: var(--foreground-muted) !important;
+}
+
+/* Gradients (hover:from-indigo hover:to-purple) */
+[data-theme="sketch"] [class*="hover:from-indigo"]:hover,
+[data-theme="sketch"] [class*="hover:to-purple"]:hover {
+  background-image: none !important;
+  background-color: var(--foreground-muted) !important;
 }

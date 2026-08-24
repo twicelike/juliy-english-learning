@@ -165,7 +165,7 @@ function SessionRunner() {
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-4 text-center px-6">
         <h2 className="text-2xl font-bold text-white">Something went wrong</h2>
         <p className="text-white/50">{errorMsg}</p>
-        <button onClick={() => router.push("/learn")} className="mt-4 px-6 py-3 rounded-xl bg-indigo-500 text-white hover:bg-indigo-600">
+        <button onClick={() => router.push("/learn")} className="mt-4 px-6 py-3 rounded-xl bg-stone-800 text-white hover:bg-stone-900">
           Back to Dashboard
         </button>
       </div>
@@ -177,7 +177,7 @@ function SessionRunner() {
       <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-6 text-center px-6">
         <h1 className="text-3xl font-bold text-white">{doneMsg.title}</h1>
         <p className="text-white/50">{doneMsg.desc}</p>
-        <button onClick={() => router.push("/learn")} className="px-6 py-3 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600">
+        <button onClick={() => router.push("/learn")} className="px-6 py-3 rounded-xl bg-stone-800 text-white font-medium hover:bg-stone-900">
           Back to Dashboard
         </button>
       </div>
@@ -339,7 +339,7 @@ function SessionRunner() {
             {(!card.choices || card.choices.length === 0) ? (
               <div className="text-center p-6 bg-white/5 border border-white/10 rounded-2xl">
                 <p className="text-white/50 mb-4">No choices available for this word.</p>
-                <button onClick={handleMcqNext} className="px-6 py-2 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors">
+                <button onClick={handleMcqNext} className="px-6 py-2 rounded-xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors">
                   Skip →
                 </button>
               </div>
@@ -366,7 +366,7 @@ function SessionRunner() {
           </div>
 
           {selectedChoice !== null && (
-            <button onClick={handleMcqNext} className="mt-8 px-8 py-3 rounded-2xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors">
+            <button onClick={handleMcqNext} className="mt-8 px-8 py-3 rounded-2xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors">
               Next →
             </button>
           )}
@@ -382,7 +382,7 @@ function SessionRunner() {
             {!card.fill_blank_question ? (
               <div className="text-center p-6">
                 <p className="text-white/50 mb-4">No sentence available for this word.</p>
-                <button onClick={handleFbNext} className="px-6 py-2 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors">
+                <button onClick={handleFbNext} className="px-6 py-2 rounded-xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors">
                   Skip →
                 </button>
               </div>
@@ -432,7 +432,7 @@ function SessionRunner() {
             <button 
               onClick={fbSubmitted ? handleFbNext : handleFbSubmit} 
               disabled={!fbInput.trim()}
-              className="mt-4 px-8 py-3 rounded-2xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors disabled:opacity-50"
+              className="mt-4 px-8 py-3 rounded-2xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors disabled:opacity-50"
             >
               {fbSubmitted ? (currentIndex + 1 >= items.length ? "Submit Session" : "Next →") : "Check Answer"}
             </button>

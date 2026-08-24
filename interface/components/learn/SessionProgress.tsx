@@ -16,13 +16,13 @@ export function SessionProgress({ currentIndex, totalItems, onSuspend, phase }: 
       <div className="flex items-center justify-between relative">
         {/* Phase Indicators */}
         <div className="flex gap-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "flashcard" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "flashcard" ? "bg-stone-800 text-white" : "bg-white/10 text-white/40"}`}>
             1. Recall
           </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "mcq" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "mcq" ? "bg-stone-800 text-white" : "bg-white/10 text-white/40"}`}>
             2. Quiz
           </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "fill_blank" ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "fill_blank" ? "bg-stone-800 text-white" : "bg-white/10 text-white/40"}`}>
             3. Context
           </span>
         </div>
@@ -44,7 +44,7 @@ export function SessionProgress({ currentIndex, totalItems, onSuspend, phase }: 
       </div>
       <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
         <div
-          className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out"
+          className="h-full bg-stone-800 rounded-full transition-all duration-500 ease-out"
           style={{ width: `${progressPct}%` }}
         />
       </div>

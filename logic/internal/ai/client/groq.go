@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 )
 
 // GroqClient implements ai.AIClient using the Groq API (OpenAI compatible).
@@ -21,7 +22,7 @@ type GroqClient struct {
 // model is the model name (e.g. "llama3-8b-8192").
 func NewGroqClient(apiKey, model string) (*GroqClient, error) {
 	if model == "" {
-		model = "llama-3.1-8b-instant"
+		model = "llama3-8b-8192"
 	}
 	return &GroqClient{
 		apiKey:     apiKey,
@@ -31,19 +32,14 @@ func NewGroqClient(apiKey, model string) (*GroqClient, error) {
 }
 
 type groqRequest struct {
-	Model          string           `json:"model"`
-	Messages       []groqMessage    `json:"messages"`
-	ResponseFormat *groqResponseFmt `json:"response_format,omitempty"`
-	Temperature    float64          `json:"temperature"`
+	Model       string        `json:"model"`
+	Messages    []groqMessage `json:"messages"`
+	Temperature float64       `json:"temperature"`
 }
 
 type groqMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
-}
-
-type groqResponseFmt struct {
-	Type string `json:"type"`
 }
 
 type groqResponse struct {
@@ -54,15 +50,67 @@ type groqResponse struct {
 	} `json:"choices"`
 }
 
+// extractJSONObject extracts the first complete JSON object from a raw text
+// response. It uses brace-depth counting while correctly skipping string
+// literals (including escaped characters), so backticks, braces inside strings,
+// or trailing notes appended by the model cannot confuse it.
+func extractJSONObject(raw string) string {
+	start := strings.Index(raw, "{")
+	if start == -1 {
+		return raw // no object found; let Unmarshal report the error
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i := start; i < len(raw); i++ {
+		c := raw[i]
+
+		if escaped {
+			escaped = false
+			continue
+		}
+		if c == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+
+		switch c {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return raw[start : i+1]
+			}
+		}
+	}
+
+	return raw // incomplete object; let Unmarshal report the error
+}
+
 // GenerateJSON sends a prompt to Groq and unmarshals the JSON response into dst.
+// We intentionally omit response_format:json_object because not all Groq-hosted
+// models support it (e.g. qwen models return an empty failed_generation when it
+// is set). Instead we rely on the prompt's instruction to return JSON and
+// extract the JSON object from the raw text response via extractJSON.
 func (g *GroqClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst any) error {
+	messages := []groqMessage{
+		{Role: "user", Content: prompt},
+	}
+
 	reqBody := groqRequest{
-		Model: g.model,
-		Messages: []groqMessage{
-			{Role: "user", Content: prompt},
-		},
-		ResponseFormat: &groqResponseFmt{Type: "json_object"},
-		Temperature:    0.2, // low temp for deterministic JSON
+		Model:       g.model,
+		Messages:    messages,
+		Temperature: 0.2, // low temp for deterministic JSON
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -98,7 +146,7 @@ func (g *GroqClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst
 		return fmt.Errorf("groq: empty response")
 	}
 
-	rawJSON := gResp.Choices[0].Message.Content
+	rawJSON := extractJSONObject(gResp.Choices[0].Message.Content)
 	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
 		return fmt.Errorf("groq: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
 	}

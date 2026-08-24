@@ -207,9 +207,7 @@ func (s *service) UpdatePreferences(ctx context.Context, userID string, req *Upd
 	return s.repo.Upsert(ctx, profile)
 }
 
-type aiRecommendation struct {
-	Message string `json:"message"`
-}
+
 
 func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardResponse, error) {
 	// 1. Load Profile
@@ -321,40 +319,8 @@ func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardRe
 	}
 
 	// 5. Optionally Generate AI Summary Message
-	aiMessage := "Keep up the good work!"
-	if s.aiClient != nil && profileDTO.CompletedPlacement {
-		// Build skills summary string
-		var skillsSummary []string
-		for _, s := range profileDTO.Skills {
-			skillsSummary = append(skillsSummary, fmt.Sprintf("%s: %s (%.1f)", s.Skill, s.Level, s.Score))
-		}
-		skillsStr := strings.Join(skillsSummary, ", ")
-		if skillsStr == "" {
-			skillsStr = "No data yet"
-		}
-
-		goalsStr := strings.Join(profileDTO.Goals, ", ")
-		if goalsStr == "" {
-			goalsStr = "General improvement"
-		}
-
-		focusStr := strings.Join(profileDTO.FocusAreas, ", ")
-		if focusStr == "" {
-			focusStr = "None"
-		}
-
-		prompt := fmt.Sprintf(`You are a concise, encouraging English tutor.
-Goals: %s. Focus Areas: %s. Skill assessment: %s. Due words today: %d.
-
-Write a very short, encouraging advice sentence (under 30 words) on what to focus on next. Focus on behavior and actionable next steps.
-Return ONLY a JSON object with a "message" string field.`, 
-		goalsStr, focusStr, skillsStr, learningDash.DueToday)
-		
-		var aiResp aiRecommendation
-		if err := s.aiClient.GenerateJSON(ctx, prompt, nil, &aiResp); err == nil && aiResp.Message != "" {
-			aiMessage = aiResp.Message
-		}
-	}
+	// Removed AI quote generation to drastically improve page load times.
+	aiMessage := ""
 
 	// Calculate accuracy (dummy value or based on DP)
 	accuracy := 0

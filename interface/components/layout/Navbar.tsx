@@ -14,7 +14,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <span className="text-2xl">📖</span>
-          <span className="font-bold tracking-tight text-lg group-hover:text-indigo-300 transition-colors">
+          <span className="font-bold tracking-tight text-lg">
             JULIY
           </span>
         </Link>

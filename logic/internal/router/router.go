@@ -72,7 +72,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		var errAI error
 
 		if cfg.GroqAPIKey != "" {
-			rawAI, errAI = aiclient.NewGroqClient(cfg.GroqAPIKey, "llama-3.3-70b-versatile")
+			rawAI, errAI = aiclient.NewGroqClient(cfg.GroqAPIKey, "qwen/qwen3.6-27b")
 		} else if cfg.HFToken != "" {
 			rawAI, errAI = aiclient.NewHuggingFaceClient(cfg.HFToken, cfg.HFModel)
 		} else if cfg.OpenRouterAPIKey != "" {
