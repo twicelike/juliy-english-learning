@@ -122,7 +122,7 @@ func (s *service) Logout(ctx context.Context, rawToken string) error {
 		return nil
 	}
 	hash := hashToken(rawToken)
-	
+
 	err := s.repo.RevokeSession(ctx, hash)
 	if err == nil {
 		log.Printf("[AUTH] event=auth.session.revoked hash=%s\n", hash)
@@ -350,7 +350,7 @@ func (s *service) ForgotPassword(ctx context.Context, email string) error {
 
 	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.frontendURL, rawToken)
 	body := fmt.Sprintf("<p>Click the link below to reset your password:</p><p><a href='%s'>%s</a></p><p>This link expires in 15 minutes.</p>", resetLink, resetLink)
-	
+
 	go s.mailer.SendEmail([]string{user.Email}, "Password Reset", body)
 
 	return nil
@@ -408,7 +408,7 @@ func (s *service) sendVerificationEmail(ctx context.Context, user *User) error {
 
 	verifyLink := fmt.Sprintf("%s/verify-email?token=%s", s.frontendURL, rawToken)
 	body := fmt.Sprintf("<p>Please click the link below to verify your email:</p><p><a href='%s'>%s</a></p><p>This link expires in 15 minutes.</p>", verifyLink, verifyLink)
-	
+
 	go s.mailer.SendEmail([]string{user.Email}, "Verify your email", body)
 
 	return nil

@@ -204,7 +204,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	ip := c.ClientIP()
 
 	rawSessionToken, _ := c.Cookie(sessionCookieName)
-	
+
 	// If a session exists, we attempt to link
 	if rawSessionToken != "" {
 		userID, err := h.service.GetUserIDFromToken(c.Request.Context(), rawSessionToken)

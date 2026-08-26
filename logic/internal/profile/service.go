@@ -142,7 +142,7 @@ func (s *service) SubmitPlacementTest(ctx context.Context, userID string, req *S
 	if s.evalService != nil {
 		var evidences []*evaluation.Evidence
 		eventID := fmt.Sprintf("assessment_%d", time.Now().Unix())
-		
+
 		for skillStr, max := range skillMax {
 			correct := skillScores[skillStr]
 			// Normalized score (0-100)
@@ -150,7 +150,7 @@ func (s *service) SubmitPlacementTest(ctx context.Context, userID string, req *S
 			if max > 0 {
 				skillScore = (float64(correct) / float64(max)) * 100
 			}
-			
+
 			evidences = append(evidences, &evaluation.Evidence{
 				UserID:     oid,
 				EventID:    eventID,
@@ -162,7 +162,7 @@ func (s *service) SubmitPlacementTest(ctx context.Context, userID string, req *S
 				OccurredAt: time.Now(),
 			})
 		}
-		
+
 		if len(evidences) > 0 {
 			go func(evs []*evaluation.Evidence) {
 				bgCtx := context.Background()
@@ -206,8 +206,6 @@ func (s *service) UpdatePreferences(ctx context.Context, userID string, req *Upd
 
 	return s.repo.Upsert(ctx, profile)
 }
-
-
 
 func (s *service) GetDashboard(ctx context.Context, userID string) (*DashboardResponse, error) {
 	// 1. Load Profile
@@ -436,7 +434,7 @@ func (s *service) RefreshSkills(ctx context.Context, userIDStr string) error {
 		}
 		profile.Skills = newSkills
 		profile.UpdatedAt = now
-		
+
 		if err := s.repo.Upsert(ctx, profile); err != nil {
 			return fmt.Errorf("failed to save profile: %w", err)
 		}

@@ -27,7 +27,7 @@ func NewRefillJob(repo *Repository, generator *GeneratorService) *RefillJob {
 func (j *RefillJob) Start(ctx context.Context, interval time.Duration) {
 	go func() {
 		log.Info().Dur("interval", interval).Msg("Starting Writing Mission Auto Refill Ticker")
-		
+
 		// Run once immediately
 		j.runOnce(ctx)
 
@@ -55,7 +55,7 @@ func (j *RefillJob) runOnce(ctx context.Context) {
 	for topic, scenarios := range SupportedScenarios {
 		for _, scenario := range scenarios {
 			for _, difficulty := range SupportedDifficulties {
-				
+
 				// Check if context is cancelled
 				select {
 				case <-ctx.Done():
@@ -77,7 +77,7 @@ func (j *RefillJob) runOnce(ctx context.Context) {
 						Str("difficulty", difficulty).
 						Int64("count", count).
 						Msg("Mission count below threshold. Generating new missions...")
-					
+
 					// Call AI to generate missions
 					missions, err := j.generator.GenerateMissions(ctx, topic, scenario, difficulty, j.batchSize)
 					if err != nil {
@@ -93,7 +93,7 @@ func (j *RefillJob) runOnce(ctx context.Context) {
 							log.Info().Int("inserted", inserted).Msg("Successfully inserted new missions")
 						}
 					}
-					
+
 					// Sleep briefly to avoid hitting rate limits
 					time.Sleep(5 * time.Second)
 				}

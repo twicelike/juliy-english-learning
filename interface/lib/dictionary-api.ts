@@ -2,7 +2,8 @@ import apiClient from "./api-client";
 
 export interface DefinitionDTO {
   word_id?: string;
-  sense_index: number;
+  sense_id: string;
+  sense_index?: number;
   partOfSpeech?: string;
   definition: string;
   examples: string[];

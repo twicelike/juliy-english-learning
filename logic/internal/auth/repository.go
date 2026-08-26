@@ -48,20 +48,20 @@ type Repository interface {
 }
 
 type repository struct {
-	userColl           *mongo.Collection
-	sessionColl        *mongo.Collection
-	identityColl       *mongo.Collection
-	emailVerifColl     *mongo.Collection
-	passwordResetColl  *mongo.Collection
+	userColl          *mongo.Collection
+	sessionColl       *mongo.Collection
+	identityColl      *mongo.Collection
+	emailVerifColl    *mongo.Collection
+	passwordResetColl *mongo.Collection
 }
 
 func NewRepository(db *mongo.Database) Repository {
 	return &repository{
-		userColl:           db.Collection("users"),
-		sessionColl:        db.Collection("sessions"),
-		identityColl:       db.Collection("auth_identities"),
-		emailVerifColl:     db.Collection("email_verification_tokens"),
-		passwordResetColl:  db.Collection("password_reset_tokens"),
+		userColl:          db.Collection("users"),
+		sessionColl:       db.Collection("sessions"),
+		identityColl:      db.Collection("auth_identities"),
+		emailVerifColl:    db.Collection("email_verification_tokens"),
+		passwordResetColl: db.Collection("password_reset_tokens"),
 	}
 }
 

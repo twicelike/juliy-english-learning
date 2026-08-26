@@ -26,7 +26,7 @@ func (s *LocalStorage) Save(ctx context.Context, prefix string, filename string,
 	now := time.Now()
 	// Build key like: prefix/2023/10/25/filename
 	keyPath := filepath.Join(prefix, fmt.Sprintf("%04d", now.Year()), fmt.Sprintf("%02d", now.Month()), fmt.Sprintf("%02d", now.Day()))
-	
+
 	fullDir := filepath.Join(s.baseDir, keyPath)
 	if err := os.MkdirAll(fullDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", fullDir, err)
@@ -58,7 +58,7 @@ func (s *LocalStorage) Save(ctx context.Context, prefix string, filename string,
 // Open opens a file by its key.
 func (s *LocalStorage) Open(ctx context.Context, key string) (io.ReadCloser, *StoredFile, error) {
 	fullPath := filepath.Join(s.baseDir, filepath.FromSlash(key))
-	
+
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -76,9 +76,9 @@ func (s *LocalStorage) Open(ctx context.Context, key string) (io.ReadCloser, *St
 	// but the interface needs it. We can return an empty string or try to guess.
 	// The DB will have the mime_type.
 	stored := &StoredFile{
-		Key:      key,
-		Path:     fullPath,
-		Size:     info.Size(),
+		Key:  key,
+		Path: fullPath,
+		Size: info.Size(),
 	}
 
 	return file, stored, nil

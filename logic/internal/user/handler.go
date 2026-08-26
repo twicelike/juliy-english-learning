@@ -21,7 +21,7 @@ func NewHandler(service Service) *Handler {
 
 func (h *Handler) GetProfile(c *gin.Context) {
 	userID := c.GetString(middleware.UserIDKey)
-	
+
 	profile, err := h.service.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
@@ -31,7 +31,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	
+
 	domain.OK(c, profile)
 }
 
@@ -72,12 +72,12 @@ func (h *Handler) RemoveBookmark(c *gin.Context) {
 
 func (h *Handler) ListBookmarks(c *gin.Context) {
 	userID := c.GetString(middleware.UserIDKey)
-	
+
 	bookmarks, err := h.service.ListBookmarks(c.Request.Context(), userID)
 	if err != nil {
 		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	
+
 	domain.OK(c, bookmarks)
 }

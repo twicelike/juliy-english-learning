@@ -9,7 +9,7 @@ import (
 type WordTranslation struct {
 	ID             bson.ObjectID `bson:"_id,omitempty" json:"id"`
 	WordID         bson.ObjectID `bson:"word_id" json:"word_id"`
-	SenseIndex     int           `bson:"sense_index" json:"sense_index"`
+	SenseID        string        `bson:"sense_id" json:"sense_id"`
 	SourceLanguage string        `bson:"source_language" json:"source_language"`
 	TargetLanguage string        `bson:"target_language" json:"target_language"`
 	Translations   []string      `bson:"translations" json:"translations"`

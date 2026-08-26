@@ -42,19 +42,19 @@ func (a ActivityType) XP() int {
 
 // DailyProgress logs activity for a specific day.
 type DailyProgress struct {
-	ID               bson.ObjectID `bson:"_id,omitempty"`
-	UserID           bson.ObjectID `bson:"user_id"`
-	Date             string        `bson:"date"` // Format: YYYY-MM-DD
-	XP               int           `bson:"xp"`
-	ReviewsCompleted int           `bson:"reviews_completed"`
-	CorrectReviews   int           `bson:"correct_reviews"`
+	ID                       bson.ObjectID `bson:"_id,omitempty"`
+	UserID                   bson.ObjectID `bson:"user_id"`
+	Date                     string        `bson:"date"` // Format: YYYY-MM-DD
+	XP                       int           `bson:"xp"`
+	ReviewsCompleted         int           `bson:"reviews_completed"`
+	CorrectReviews           int           `bson:"correct_reviews"`
 	NewWordsLearned          int           `bson:"new_words_learned"`
 	StudyMinutes             int           `bson:"study_minutes"`
 	WritingMissionsCompleted int           `bson:"writing_missions_completed"`
 	SpeakingTasksCompleted   int           `bson:"speaking_tasks_completed"`
 	DailyGoalReached         bool          `bson:"daily_goal_reached"`
-	CreatedAt        time.Time     `bson:"created_at"`
-	UpdatedAt        time.Time     `bson:"updated_at"`
+	CreatedAt                time.Time     `bson:"created_at"`
+	UpdatedAt                time.Time     `bson:"updated_at"`
 }
 
 // UserStats stores aggregate gamification metrics.
@@ -107,8 +107,6 @@ type ChartDataPoint struct {
 	Active     bool   `json:"active"`
 }
 
-
-
 type DailyProgressDTO struct {
 	XP               int `json:"xp"`
 	ReviewsCompleted int `json:"reviews_completed"`
@@ -139,7 +137,7 @@ type Service interface {
 	TrackActivity(ctx context.Context, userID string, activity ActivityType, count int, correctCount int, customXP int, dailyGoal int) error
 	TrackWritingMission(ctx context.Context, userID string, score int) error
 	TrackSpeakingSession(ctx context.Context, userID string, score int) error
-	
+
 	GetStatsAndProgress(ctx context.Context, userID string) (*UserStats, *DailyProgress, []AchievementDef, error)
 	GetChartData(ctx context.Context, userID string, periodDays int) ([]ChartDataPoint, error)
 }

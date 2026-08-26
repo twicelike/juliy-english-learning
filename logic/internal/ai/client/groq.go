@@ -225,8 +225,8 @@ func (g *GroqClient) GenerateText(ctx context.Context, prompt string) (string, e
 		Messages: []groqMessage{
 			{Role: "user", Content: prompt},
 		},
-		
-		Temperature:    0.2, // low temp for deterministic JSON
+
+		Temperature: 0.2, // low temp for deterministic JSON
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

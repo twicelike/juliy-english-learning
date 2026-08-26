@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/english/backend/internal/domain"
+	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
@@ -78,7 +78,7 @@ func (h *Handler) GetWordOfTheDay(c *gin.Context) {
 	// Use today's date as a deterministic seed string.
 	// We'll base it on UTC to avoid timezone edge cases.
 	dateStr := time.Now().UTC().Format("2006-01-02")
-	
+
 	dto, err := h.service.GetWordOfTheDay(c.Request.Context(), dateStr)
 	if err != nil {
 		domain.Fail(c, http.StatusInternalServerError, "DB_ERROR", err.Error())

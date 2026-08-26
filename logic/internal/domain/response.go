@@ -8,9 +8,9 @@ import (
 
 // ApiResponse is the single standard envelope for every API response.
 type ApiResponse struct {
-	Success bool       `json:"success"`
-	Data    any        `json:"data,omitempty"`
-	Error   *ApiError  `json:"error,omitempty"`
+	Success bool      `json:"success"`
+	Data    any       `json:"data,omitempty"`
+	Error   *ApiError `json:"error,omitempty"`
 }
 
 // ApiError carries a machine-readable code and a human-readable message.

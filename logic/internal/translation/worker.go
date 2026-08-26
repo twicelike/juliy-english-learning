@@ -104,12 +104,12 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 		w.failJobs(ctx, jobs, fmt.Errorf("failed to check existing translations: %w", err))
 		return
 	}
-	
+
 	existingMap := make(map[bson.ObjectID]bool)
 	for _, ex := range existing {
 		existingMap[ex.WordID] = true
 	}
-	
+
 	var missingWordIDs []bson.ObjectID
 	for _, wID := range wordIDs {
 		if existingMap[wID] {
@@ -118,17 +118,17 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 			missingWordIDs = append(missingWordIDs, wID)
 		}
 	}
-	
+
 	if len(missingWordIDs) == 0 {
 		return // All words already translated
 	}
-	
+
 	words, err := w.dictSvc.GetManyByIDs(ctx, missingWordIDs)
 	if err != nil {
 		w.failJobs(ctx, jobs, fmt.Errorf("failed to fetch words from dictionary: %w", err))
 		return
 	}
-	
+
 	wordMap := make(map[string]dictionary.WordDTO)
 	for _, w := range words {
 		wordMap[w.ID] = w
@@ -137,7 +137,7 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 	input := TranslateBatchInput{
 		TargetLanguage: targetLang,
 	}
-	
+
 	for _, wID := range missingWordIDs {
 		wIDStr := wID.Hex()
 		dictWord, ok := wordMap[wIDStr]
@@ -145,15 +145,20 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusFailed, "word not found in dictionary", time.Now().Add(8760*time.Hour))
 			continue
 		}
-		
+
+		if dictWord.FrequencyScore < 60 {
+			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusFailed, "skipped: frequency_score < 60", time.Now().Add(8760*time.Hour))
+			continue
+		}
+
 		var meanings []MeaningInput
 		for _, s := range dictWord.Definitions {
 			meanings = append(meanings, MeaningInput{
-				SenseIndex: s.SenseIndex,
+				SenseID:    s.SenseID,
 				Definition: s.Definition,
 			})
 		}
-		
+
 		input.Words = append(input.Words, TranslateWordInput{
 			WordID:       wIDStr,
 			Word:         dictWord.Word,
@@ -181,7 +186,7 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 	for _, tr := range translations {
 		translatedSet[tr.WordID] = true
 	}
-	
+
 	for _, j := range jobs {
 		if translatedSet[j.WordID] {
 			w.repo.UpdateJobStatus(ctx, j.ID, JobStatusCompleted, "", time.Time{})

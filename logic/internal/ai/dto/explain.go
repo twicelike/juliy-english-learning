@@ -24,28 +24,28 @@ func (r *BatchExplainResponse) Validate(requestedIndices []int) error {
 	if len(r.Explanations) != len(requestedIndices) {
 		return fmt.Errorf("AI explain: expected %d explanations, got %d", len(requestedIndices), len(r.Explanations))
 	}
-	
+
 	// Create map to check for missing/extra indices
 	received := make(map[int]bool)
 	for _, exp := range r.Explanations {
 		received[exp.SenseIndex] = true
 	}
-	
+
 	for _, idx := range requestedIndices {
 		if !received[idx] {
 			return fmt.Errorf("AI explain: missing explanation for sense %d", idx)
 		}
 	}
-	
+
 	return nil
 }
 
 // NuanceResponse is returned by AITutorService.ExplainNuance.
 type NuanceResponse struct {
-	CoreMeaning    string   `json:"coreMeaning"`
-	SubtleMeaning  string   `json:"subtleMeaning"`
-	UsageNotes     []string `json:"usageNotes"`
-	ConfusedWith   []string `json:"confusedWith"`
+	CoreMeaning   string   `json:"coreMeaning"`
+	SubtleMeaning string   `json:"subtleMeaning"`
+	UsageNotes    []string `json:"usageNotes"`
+	ConfusedWith  []string `json:"confusedWith"`
 }
 
 func (r *NuanceResponse) Validate() error {
@@ -90,4 +90,3 @@ func (r *ExamplesResponse) Validate() error {
 	}
 	return nil
 }
-

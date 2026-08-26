@@ -9,7 +9,7 @@ import (
 func generateObjectIDs(count int) []SessionItemRef {
 	var ids []SessionItemRef
 	for i := 0; i < count; i++ {
-		ids = append(ids, SessionItemRef{WordID: bson.NewObjectID(), SenseIndex: 0})
+		ids = append(ids, SessionItemRef{WordID: bson.NewObjectID(), SenseID: "test-sense-id"})
 	}
 	return ids
 }
@@ -126,7 +126,7 @@ func TestSelectReviewWords_FallbackToAvailable(t *testing.T) {
 
 func contains(slice []SessionItemRef, item SessionItemRef) bool {
 	for _, s := range slice {
-		if s.WordID == item.WordID && s.SenseIndex == item.SenseIndex {
+		if s.WordID == item.WordID && s.SenseID == item.SenseID {
 			return true
 		}
 	}

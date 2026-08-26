@@ -42,6 +42,9 @@ export default function Navbar() {
               <Link href="/word-sets/explore" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 Explore
               </Link>
+              <Link href="/match" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
+                Match
+              </Link>
               <Link href="/word-sets" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 My Sets
               </Link>

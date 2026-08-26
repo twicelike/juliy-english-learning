@@ -23,6 +23,7 @@ func (r *exerciseContentRepository) EnsureIndexes(ctx context.Context) error {
 	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "word_id", Value: 1},
+			{Key: "sense_id", Value: 1},
 			{Key: "type", Value: 1},
 			{Key: "content_hash", Value: 1},
 		},
@@ -39,19 +40,30 @@ func (r *exerciseContentRepository) Save(ctx context.Context, content *ExerciseC
 	return err
 }
 
-func (r *exerciseContentRepository) GetRandomExercises(ctx context.Context, wordIDs []bson.ObjectID, exType ExerciseType, limitPerWord int) (map[bson.ObjectID][]ExerciseContent, error) {
-	if len(wordIDs) == 0 {
+func (r *exerciseContentRepository) GetRandomExercises(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error) {
+	if len(refs) == 0 {
 		return nil, nil
+	}
+
+	var orConditions []bson.M
+	for _, ref := range refs {
+		orConditions = append(orConditions, bson.M{
+			"word_id":  ref.WordID,
+			"sense_id": ref.SenseID,
+		})
 	}
 
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
-			"word_id": bson.M{"$in": wordIDs},
-			"type":    exType,
+			"$or":  orConditions,
+			"type": exType,
 		}}},
-		// Group by word_id, and push all exercises into an array
+		// Group by word_id and sense_id
 		{{Key: "$group", Value: bson.M{
-			"_id":       "$word_id",
+			"_id": bson.M{
+				"word_id":  "$word_id",
+				"sense_id": "$sense_id",
+			},
 			"exercises": bson.M{"$push": "$$ROOT"},
 		}}},
 		// Slice the array to get at most limitPerWord random items.
@@ -69,8 +81,13 @@ func (r *exerciseContentRepository) GetRandomExercises(ctx context.Context, word
 	}
 	defer cursor.Close(ctx)
 
+	type groupID struct {
+		WordID  bson.ObjectID `bson:"word_id"`
+		SenseID string        `bson:"sense_id"`
+	}
+
 	type groupResult struct {
-		WordID    bson.ObjectID     `bson:"_id"`
+		ID        groupID           `bson:"_id"`
 		Exercises []ExerciseContent `bson:"exercises"`
 	}
 
@@ -79,9 +96,10 @@ func (r *exerciseContentRepository) GetRandomExercises(ctx context.Context, word
 		return nil, err
 	}
 
-	out := make(map[bson.ObjectID][]ExerciseContent)
+	out := make(map[string][]ExerciseContent)
 	for _, res := range results {
-		out[res.WordID] = res.Exercises
+		key := res.ID.WordID.Hex() + ":" + res.ID.SenseID
+		out[key] = res.Exercises
 	}
 
 	return out, nil

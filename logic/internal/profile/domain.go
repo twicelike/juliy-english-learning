@@ -33,10 +33,10 @@ const (
 type SkillTrend string
 
 const (
-	SkillTrendImproving     SkillTrend = "improving"
-	SkillTrendStable        SkillTrend = "stable"
-	SkillTrendDeclining     SkillTrend = "declining"
-	SkillTrendInsufficient  SkillTrend = "insufficient_data"
+	SkillTrendImproving    SkillTrend = "improving"
+	SkillTrendStable       SkillTrend = "stable"
+	SkillTrendDeclining    SkillTrend = "declining"
+	SkillTrendInsufficient SkillTrend = "insufficient_data"
 )
 
 type SkillAssessment struct {
@@ -49,17 +49,15 @@ type SkillAssessment struct {
 	Trend           SkillTrend `bson:"trend" json:"trend"`
 }
 
-
-
 // UserProfile represents the personalized learning state and settings of a user.
 type UserProfile struct {
-	ID                 bson.ObjectID `bson:"_id,omitempty"`
-	UserID             bson.ObjectID `bson:"user_id"`
-	PlacementScore     int           `bson:"placement_score"`
-	CurrentCEFR        string        `bson:"current_cefr"` // A1, A2, B1, B2, C1, C2
-	DailyGoal          int           `bson:"daily_goal"`
-	CompletedPlacement bool          `bson:"completed_placement"`
-	LastAssessmentAt   time.Time     `bson:"last_assessment_at"`
+	ID                 bson.ObjectID     `bson:"_id,omitempty"`
+	UserID             bson.ObjectID     `bson:"user_id"`
+	PlacementScore     int               `bson:"placement_score"`
+	CurrentCEFR        string            `bson:"current_cefr"` // A1, A2, B1, B2, C1, C2
+	DailyGoal          int               `bson:"daily_goal"`
+	CompletedPlacement bool              `bson:"completed_placement"`
+	LastAssessmentAt   time.Time         `bson:"last_assessment_at"`
 	Strengths          []string          `bson:"strengths"`  // E.g. ["Business", "Noun"] (Legacy)
 	Weaknesses         []string          `bson:"weaknesses"` // E.g. ["Technology", "Verb"] (Legacy)
 	Skills             []SkillAssessment `bson:"skills"`
@@ -75,13 +73,13 @@ type UserProfile struct {
 
 // UserProfileDTO is the external representation of a UserProfile.
 type UserProfileDTO struct {
-	CurrentCEFR        string   `json:"current_cefr"`
-	DailyGoal          int      `json:"daily_goal"`
-	CompletedPlacement  bool              `json:"completed_placement"`
-	LastAssessmentAt   *time.Time         `json:"last_assessment_at,omitempty"`
-	Strengths          []string           `json:"strengths"`  // Deprecated: use Skills instead
-	Weaknesses         []string           `json:"weaknesses"` // Deprecated: use Skills instead
-	Skills             []SkillAssessment  `json:"skills"`
+	CurrentCEFR        string            `json:"current_cefr"`
+	DailyGoal          int               `json:"daily_goal"`
+	CompletedPlacement bool              `json:"completed_placement"`
+	LastAssessmentAt   *time.Time        `json:"last_assessment_at,omitempty"`
+	Strengths          []string          `json:"strengths"`  // Deprecated: use Skills instead
+	Weaknesses         []string          `json:"weaknesses"` // Deprecated: use Skills instead
+	Skills             []SkillAssessment `json:"skills"`
 	Goals              []string          `json:"goals"`
 	FocusAreas         []string          `json:"focus_areas"`
 }
@@ -141,17 +139,17 @@ type DashboardResponse struct {
 type QuestionType string
 
 const (
-	TypeSynonym  QuestionType = "synonym"
-	TypeFill     QuestionType = "fill_blank"
-	TypeGrammar  QuestionType = "grammar"
+	TypeSynonym QuestionType = "synonym"
+	TypeFill    QuestionType = "fill_blank"
+	TypeGrammar QuestionType = "grammar"
 )
 
 // PlacementQuestionDTO represents a single question in the placement test.
 type PlacementQuestionDTO struct {
-	ID            string       `json:"id"`
-	Type          QuestionType `json:"type"`
-	Question      string       `json:"question"`
-	Options       []string     `json:"options"`
+	ID       string       `json:"id"`
+	Type     QuestionType `json:"type"`
+	Question string       `json:"question"`
+	Options  []string     `json:"options"`
 	// Note: CorrectAnswer is omitted from the DTO so the frontend doesn't know it.
 }
 

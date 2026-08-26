@@ -122,7 +122,7 @@ func (r *repository) CreateSession(ctx context.Context, session *SpeakingSession
 func (r *repository) UpdateSession(ctx context.Context, session *SpeakingSession) error {
 	filter := bson.M{"_id": session.ID, "user_id": session.UserID} // Ownership check
 	update := bson.M{"$set": session}
-	
+
 	result, err := r.sessionsColl.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
@@ -244,10 +244,10 @@ func (r *repository) GetAttemptByID(ctx context.Context, userID, attemptID bson.
 
 func (r *repository) GetAttemptsBySession(ctx context.Context, userID, sessionID bson.ObjectID) ([]SpeakingAttempt, error) {
 	filter := bson.M{"session_id": sessionID, "user_id": userID} // Ownership check
-	
+
 	// Sort by created_at ascending so older attempts appear first
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}})
-	
+
 	cursor, err := r.attemptsColl.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err
@@ -264,15 +264,15 @@ func (r *repository) GetAttemptsBySession(ctx context.Context, userID, sessionID
 func (r *repository) GetRecentCompletedAttempts(ctx context.Context, userID bson.ObjectID, limit int) ([]SpeakingAttempt, error) {
 	// Status should be completed and evaluation should exist
 	filter := bson.M{
-		"user_id": userID,
-		"status":  AttemptCompleted,
+		"user_id":    userID,
+		"status":     AttemptCompleted,
 		"evaluation": bson.M{"$exists": true},
 	}
-	
+
 	opts := options.Find().
 		SetSort(bson.D{{Key: "created_at", Value: -1}}).
 		SetLimit(int64(limit))
-		
+
 	cursor, err := r.attemptsColl.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err

@@ -21,10 +21,10 @@ type Config struct {
 	RefreshExpDays int
 
 	// OAuth
-	GoogleClientID    string
+	GoogleClientID     string
 	GoogleClientSecret string
-	GoogleCallbackURL string
-	FrontendURL       string
+	GoogleCallbackURL  string
+	FrontendURL        string
 
 	// SMTP Mailer
 	SMTPHost     string
@@ -83,41 +83,41 @@ func Load() (*Config, error) {
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 
 	cfg := &Config{
-		Port:            getEnv("PORT", "8080"),
-		MongoURI:        getEnv("MONGO_URI", ""),
-		MongoDB:         getEnv("MONGO_DB", ""),
-		Env:             getEnv("ENV", "development"),
-		CORSOrigins:     getEnv("CORS_ORIGINS", "*"),
-		JWTSecret:       getEnv("JWT_SECRET", "super-secret-jwt-key-replace-me-in-prod"),
-		JWTExpMinutes:   jwtExp,
-		RefreshExpDays:  refreshExp,
-		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-		GoogleCallbackURL: getEnv("GOOGLE_CALLBACK_URL", "http://localhost:3000/api/v1/auth/google/callback"),
-		FrontendURL:     getEnv("FRONTEND_URL", "http://localhost:3000"),
-		SMTPHost:        getEnv("SMTP_HOST", "smtp.gmail.com"),
-		SMTPPort:        smtpPort,
-		SMTPUser:        getEnv("SMTP_USER", ""),
-		SMTPPassword:    getEnv("SMTP_PASSWORD", ""),
-		GeminiAPIKey:    getEnv("GEMINI_API_KEY", ""),
-		GroqAPIKey:      getEnv("GROQ_API_KEY", ""),
-		OllamaEndpoint:  getEnv("OLLAMA_ENDPOINT", ""),
-		OllamaModel:     getEnv("OLLAMA_MODEL", ""),
-		OpenRouterAPIKey: getEnv("OPENROUTER_API_KEY", ""),
-		OpenRouterModel:  getEnv("OPENROUTER_MODEL", ""),
-		HFToken:          getEnv("HF_TOKEN", ""),
-		HFModel:          getEnv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
-		AIRateLimit:     aiRateLimit,
-		AICacheTTLHours: aiCacheTTL,
+		Port:                    getEnv("PORT", "8080"),
+		MongoURI:                getEnv("MONGO_URI", ""),
+		MongoDB:                 getEnv("MONGO_DB", ""),
+		Env:                     getEnv("ENV", "development"),
+		CORSOrigins:             getEnv("CORS_ORIGINS", "*"),
+		JWTSecret:               getEnv("JWT_SECRET", "super-secret-jwt-key-replace-me-in-prod"),
+		JWTExpMinutes:           jwtExp,
+		RefreshExpDays:          refreshExp,
+		GoogleClientID:          getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:      getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleCallbackURL:       getEnv("GOOGLE_CALLBACK_URL", "http://localhost:3000/api/v1/auth/google/callback"),
+		FrontendURL:             getEnv("FRONTEND_URL", "http://localhost:3000"),
+		SMTPHost:                getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:                smtpPort,
+		SMTPUser:                getEnv("SMTP_USER", ""),
+		SMTPPassword:            getEnv("SMTP_PASSWORD", ""),
+		GeminiAPIKey:            getEnv("GEMINI_API_KEY", ""),
+		GroqAPIKey:              getEnv("GROQ_API_KEY", ""),
+		OllamaEndpoint:          getEnv("OLLAMA_ENDPOINT", ""),
+		OllamaModel:             getEnv("OLLAMA_MODEL", ""),
+		OpenRouterAPIKey:        getEnv("OPENROUTER_API_KEY", ""),
+		OpenRouterModel:         getEnv("OPENROUTER_MODEL", ""),
+		HFToken:                 getEnv("HF_TOKEN", ""),
+		HFModel:                 getEnv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
+		AIRateLimit:             aiRateLimit,
+		AICacheTTLHours:         aiCacheTTL,
 		TranslationBatchSize:    transBatch,
 		TranslationWorkerConcur: transConc,
 		TranslationMaxRetries:   transRetries,
 		TranslationPollInterval: time.Duration(transPoll) * time.Second,
-		RedisURI:        getEnv("REDIS_URI", "redis://localhost:6379/0"),
-		CacheTTLDictionaryMin:  ttlDict,
-		CacheTTLDashboardMin:   ttlDash,
-		CacheTTLLeaderboardMin: ttlLead,
-		CacheTTLAIDays:         ttlAI,
+		RedisURI:                getEnv("REDIS_URI", "redis://localhost:6379/0"),
+		CacheTTLDictionaryMin:   ttlDict,
+		CacheTTLDashboardMin:    ttlDash,
+		CacheTTLLeaderboardMin:  ttlLead,
+		CacheTTLAIDays:          ttlAI,
 	}
 
 	if cfg.MongoURI == "" {

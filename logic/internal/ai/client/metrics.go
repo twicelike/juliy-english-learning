@@ -59,7 +59,6 @@ func (m *metricsClient) GenerateMultimodalJSON(ctx context.Context, prompt strin
 	return err
 }
 
-
 func (m *metricsClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	// Simple implementation
 	return m.inner.GenerateText(ctx, prompt)

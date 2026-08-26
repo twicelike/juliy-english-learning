@@ -18,10 +18,10 @@ type LearningProgress struct {
 	ID             bson.ObjectID `bson:"_id,omitempty"`
 	UserID         bson.ObjectID `bson:"user_id"`
 	WordID         bson.ObjectID `bson:"word_id"`
-	SenseIndex     int           `bson:"sense_index"`
-	Interval       int           `bson:"interval"`         // Interval in days
-	Repetition     int           `bson:"repetition"`       // Consecutive correct reviews
-	EaseFactor     float64       `bson:"ease_factor"`      // SM-2 Ease Factor (default 2.5)
+	SenseID        string        `bson:"sense_id"`
+	Interval       int           `bson:"interval"`    // Interval in days
+	Repetition     int           `bson:"repetition"`  // Consecutive correct reviews
+	EaseFactor     float64       `bson:"ease_factor"` // SM-2 Ease Factor (default 2.5)
 	NextReviewDate time.Time     `bson:"next_review_date"`
 	LastReviewDate time.Time     `bson:"last_review_date"` // New field
 	CreatedAt      time.Time     `bson:"created_at"`
@@ -30,8 +30,8 @@ type LearningProgress struct {
 
 // LearningProgressKey uniquely identifies a progress record.
 type LearningProgressKey struct {
-	WordID     bson.ObjectID
-	SenseIndex int
+	WordID  bson.ObjectID
+	SenseID string
 }
 
 type SessionStatus string
@@ -51,10 +51,10 @@ const (
 	ReviewStrategySmart    ReviewStrategy = "smart"
 )
 
-// SessionItemRef pairs a WordID with the specific SenseIndex the user is learning.
+// SessionItemRef pairs a WordID with the specific SenseID the user is learning.
 type SessionItemRef struct {
-	WordID     bson.ObjectID `bson:"word_id"`
-	SenseIndex int           `bson:"sense_index"`
+	WordID  bson.ObjectID `bson:"word_id"`
+	SenseID string        `bson:"sense_id"`
 }
 
 // LearningSession tracks a session of learning (e.g., a batch of 10 new words).
@@ -66,11 +66,11 @@ type LearningSession struct {
 	WordSetID    *bson.ObjectID   `bson:"word_set_id,omitempty"`
 	Strategy     *ReviewStrategy  `bson:"strategy,omitempty"`
 	WordCount    int              `bson:"word_count,omitempty"`
-	Items        []SessionItemRef `bson:"items"` // Changed from WordIDs to track sense
+	Items        []SessionItemRef `bson:"items"`         // Changed from WordIDs to track sense
 	CurrentIndex int              `bson:"current_index"` // Deprecated/Not heavily used in Phase L4
 	Status       SessionStatus    `bson:"status"`        // "preparing", "active", "completed", "expired"
-	CreatedAt    time.Time       `bson:"created_at"`
-	UpdatedAt    time.Time       `bson:"updated_at"`
+	CreatedAt    time.Time        `bson:"created_at"`
+	UpdatedAt    time.Time        `bson:"updated_at"`
 }
 
 // -----------------------------------------------------------------------------
@@ -86,15 +86,16 @@ const (
 )
 
 type ExerciseContent struct {
-	ID          bson.ObjectID `bson:"_id,omitempty"`
-	WordID      bson.ObjectID `bson:"word_id"`
-	Type        ExerciseType  `bson:"type"`
+	ID      bson.ObjectID `bson:"_id,omitempty"`
+	WordID  bson.ObjectID `bson:"word_id"`
+	SenseID string        `bson:"sense_id"`
+	Type    ExerciseType  `bson:"type"`
 
 	// Flexible structure for different exercise types
-	Question    string   `bson:"question,omitempty"` // For Fill Blank
-	Sentence    string   `bson:"sentence,omitempty"` // Example sentence or full text
-	Choices     []string `bson:"choices,omitempty"`  // For MCQ
-	Answer      string   `bson:"answer"`             // The correct answer
+	Question string   `bson:"question,omitempty"` // For Fill Blank
+	Sentence string   `bson:"sentence,omitempty"` // Example sentence or full text
+	Choices  []string `bson:"choices,omitempty"`  // For MCQ
+	Answer   string   `bson:"answer"`             // The correct answer
 
 	ContentHash   string `bson:"content_hash"`   // sha256(normalize(question/sentence))
 	PromptVersion int    `bson:"prompt_version"` // Allows migrating AI prompts
@@ -119,7 +120,8 @@ type Review struct {
 	ID             bson.ObjectID `bson:"_id,omitempty"`
 	UserID         bson.ObjectID `bson:"user_id"`
 	WordID         bson.ObjectID `bson:"word_id"`
-	SenseIndex     int           `bson:"sense_index"`
+	SenseID        string        `bson:"sense_id"`
+	SenseIndex     int           `bson:"sense_index,omitempty"` // Legacy field
 	Quality        Quality       `bson:"quality"`
 	ResponseTimeMs int           `bson:"response_time_ms,omitempty"`
 	OldInterval    int           `bson:"old_interval"`
@@ -189,13 +191,13 @@ type ChoiceDTO struct {
 // SessionItemDTO carries the word data for one card in a session.
 // For flashcard mode, Choices is nil. For quiz mode, Choices is populated.
 type SessionItemDTO struct {
-	WordID            string      `json:"word_id"`
-	SenseIndex        int         `json:"sense_index"`
-	Word              string      `json:"word"`
-	POS               string      `json:"pos"`
-	IPA               string      `json:"ipa"`
-	Definitions       []string    `json:"definitions"` // first 3 glosses
-	Example           string      `json:"example"`
+	WordID      string   `json:"word_id"`
+	SenseID     string   `json:"sense_id"`
+	Word        string   `json:"word"`
+	POS         string   `json:"pos"`
+	IPA         string   `json:"ipa"`
+	Definitions []string `json:"definitions"` // first 3 glosses
+	Example     string   `json:"example"`
 
 	TranslationCandidates []string           `json:"translation_candidates,omitempty"`
 	Annotation            *UserAnnotationDTO `json:"annotation,omitempty"`
@@ -223,7 +225,7 @@ type SessionDTO struct {
 // WordResult represents the user's performance on a single word across the session phases.
 type WordResult struct {
 	WordID                string `json:"word_id" binding:"required"`
-	SenseIndex            int    `json:"sense_index"`
+	SenseID               string `json:"sense_id"`
 	FlashcardQuality      int    `json:"flashcard_quality" binding:"required,min=1,max=5"`
 	MultipleChoiceCorrect *bool  `json:"multiple_choice_correct,omitempty"`
 	FillBlankCorrect      *bool  `json:"fill_blank_correct,omitempty"`
@@ -268,7 +270,7 @@ type Repository interface {
 
 type ExerciseContentRepository interface {
 	Save(ctx context.Context, content *ExerciseContent) error
-	GetRandomExercises(ctx context.Context, wordIDs []bson.ObjectID, exType ExerciseType, limitPerWord int) (map[bson.ObjectID][]ExerciseContent, error)
+	GetRandomExercises(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error)
 	EnsureIndexes(ctx context.Context) error
 }
 
@@ -283,7 +285,7 @@ type SessionEnricher interface {
 
 type ExerciseContentService interface {
 	// GetExercises returns the requested number of exercises per word, generating them via AI if the DB pool is insufficient.
-	GetExercises(ctx context.Context, wordIDs []bson.ObjectID, exType ExerciseType, limitPerWord int) (map[bson.ObjectID][]ExerciseContent, error)
+	GetExercises(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error)
 }
 
 type Service interface {

@@ -31,7 +31,7 @@ func (r *Repository) EnsureIndexes(ctx context.Context) error {
 	// writing_missions indexes
 	missionIndexes := []mongo.IndexModel{
 		{
-			Keys: bson.D{{Key: "hash", Value: 1}},
+			Keys:    bson.D{{Key: "hash", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
 		{
@@ -124,7 +124,7 @@ func (r *Repository) InsertMissions(ctx context.Context, missions []WritingMissi
 	// Ordered: false means it continues inserting even if a duplicate key error occurs
 	opts := options.InsertMany().SetOrdered(false)
 	res, err := r.missionsCol.InsertMany(ctx, docs, opts)
-	
+
 	if err != nil {
 		// If it's a BulkWriteException, it might just be duplicate keys which is fine
 		if mongo.IsDuplicateKeyError(err) {
@@ -138,7 +138,7 @@ func (r *Repository) InsertMissions(ctx context.Context, missions []WritingMissi
 		}
 		return 0, err
 	}
-	
+
 	return len(res.InsertedIDs), nil
 }
 
@@ -206,7 +206,7 @@ func (r *Repository) GetMissionByID(ctx context.Context, id bson.ObjectID) (*Wri
 // GetReviewMission gets a random mission the user has completed, prioritizing low scores and older reviews.
 func (r *Repository) GetReviewMission(ctx context.Context, userID bson.ObjectID, topic, difficulty string) (*WritingMission, error) {
 	matchProgress := bson.M{"user_id": userID}
-	
+
 	missionMatch := bson.M{}
 	if topic != "" {
 		missionMatch["mission.topic"] = topic
@@ -225,7 +225,7 @@ func (r *Repository) GetReviewMission(ctx context.Context, userID bson.ObjectID,
 		}}},
 		{{Key: "$unwind", Value: "$mission"}},
 	}
-	
+
 	// Add mission filters if any
 	if len(missionMatch) > 0 {
 		pipeline = append(pipeline, bson.D{{Key: "$match", Value: missionMatch}})
@@ -252,9 +252,9 @@ func (r *Repository) GetReviewMission(ctx context.Context, userID bson.ObjectID,
 		},
 	}}})
 
-	pipeline = append(pipeline, 
+	pipeline = append(pipeline,
 		bson.D{{Key: "$sort", Value: bson.M{"priority": -1}}},
-		bson.D{{Key: "$limit", Value: 10}}, // Top 10 worst/oldest
+		bson.D{{Key: "$limit", Value: 10}},                 // Top 10 worst/oldest
 		bson.D{{Key: "$sample", Value: bson.M{"size": 1}}}, // Random 1 from Top 10
 	)
 
@@ -268,7 +268,7 @@ func (r *Repository) GetReviewMission(ctx context.Context, userID bson.ObjectID,
 	type Result struct {
 		Mission WritingMission `bson:"mission"`
 	}
-	
+
 	var results []Result
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func (r *Repository) UpsertProgress(ctx context.Context, progress *UserWritingPr
 		"user_id":    progress.UserID,
 		"mission_id": progress.MissionID,
 	}
-	
+
 	update := bson.M{
 		"$inc": bson.M{"attempts": 1},
 		"$set": bson.M{
@@ -331,7 +331,7 @@ func (r *Repository) UpsertProgress(ctx context.Context, progress *UserWritingPr
 // GetDashboardStats computes aggregated stats for a user's writing progress.
 func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID) (*DashboardStatsDTO, error) {
 	matchStage := bson.M{"user_id": userID, "completed": true}
-	
+
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: matchStage}},
 		{{Key: "$lookup", Value: bson.M{
@@ -342,7 +342,7 @@ func (r *Repository) GetDashboardStats(ctx context.Context, userID bson.ObjectID
 		}}},
 		{{Key: "$unwind", Value: "$mission"}},
 		{{Key: "$group", Value: bson.M{
-			"_id": nil,
+			"_id":             nil,
 			"total_completed": bson.M{"$sum": 1},
 			"average_score":   bson.M{"$avg": "$average_score"},
 			"mastered": bson.M{"$sum": bson.M{

@@ -27,7 +27,7 @@ export interface Language {
 
 export interface SavedSenseRef {
   word_id: string;
-  sense_index: number;
+  sense_id: string;
 }
 
 export interface WordSetListItem extends WordSet {
@@ -88,7 +88,7 @@ export type ProgressState = "new" | "learning" | "due" | "mastered";
 
 export interface WordViewerItemDTO extends WordDTO {
   progress_state: ProgressState;
-  sense_index?: number;
+  sense_id?: string;
   translation_candidates?: string[];
   annotation?: {
     text: string;
@@ -155,8 +155,8 @@ export const WordSetAPI = {
     return res.data.data;
   },
 
-  addWordToSet: async (setId: string, wordId: string, senseIndex: number): Promise<void> => {
-    await apiClient.post(`/word-sets/${setId}/words`, { word_id: wordId, sense_index: senseIndex });
+  addWordToSet: async (setId: string, wordId: string, senseId: string): Promise<void> => {
+    await apiClient.post(`/word-sets/${setId}/words`, { word_id: wordId, sense_id: senseId });
   },
 
   removeWordFromSet: async (setId: string, wordId: string): Promise<void> => {
@@ -195,7 +195,7 @@ export const WordSetAPI = {
     return res.data;
   },
 
-  bulkAddWords: async (setId: string, items: {word_id: string; sense_index: number}[]): Promise<{ added: number; word_count: number; limit: number }> => {
+  bulkAddWords: async (setId: string, items: {word_id: string; sense_id: string}[]): Promise<{ added: number; word_count: number; limit: number }> => {
     const res = await apiClient.post(`/word-sets/${setId}/words/bulk`, { items });
     return res.data;
   },

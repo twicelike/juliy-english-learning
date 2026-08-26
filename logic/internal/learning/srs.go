@@ -18,7 +18,7 @@ func (s *SM2Scheduler) CalculateNext(p *LearningProgress, q Quality) *LearningPr
 		ID:             p.ID,
 		UserID:         p.UserID,
 		WordID:         p.WordID,
-		SenseIndex:     p.SenseIndex,
+		SenseID:        p.SenseID,
 		CreatedAt:      p.CreatedAt,
 		LastReviewDate: time.Now(),
 	}
@@ -29,7 +29,7 @@ func (s *SM2Scheduler) CalculateNext(p *LearningProgress, q Quality) *LearningPr
 	if ef < 1.3 {
 		ef = 2.5 // Default if it was unset or invalid
 	}
-	
+
 	newEF := ef + (0.1 - float64(5-q)*(0.08+float64(5-q)*0.02))
 	if newEF < 1.3 {
 		newEF = 1.3
@@ -44,7 +44,7 @@ func (s *SM2Scheduler) CalculateNext(p *LearningProgress, q Quality) *LearningPr
 	} else {
 		// Passed
 		next.Repetition = p.Repetition + 1
-		
+
 		switch next.Repetition {
 		case 1:
 			next.Interval = 1

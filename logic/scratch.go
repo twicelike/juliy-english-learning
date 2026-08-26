@@ -32,10 +32,10 @@ func main() {
 		if !ok {
 			continue
 		}
-		
+
 		seen := make(map[string]bool)
 		var newSkills bson.A
-		
+
 		for _, s := range skills {
 			if skillDoc, ok := s.(bson.M); ok {
 				skillName := skillDoc["skill"].(string)
@@ -45,7 +45,7 @@ func main() {
 				}
 			}
 		}
-		
+
 		if len(newSkills) != len(skills) {
 			_, err := col.UpdateOne(context.Background(), bson.M{"_id": p["_id"]}, bson.M{"$set": bson.M{"skills": newSkills}})
 			if err != nil {

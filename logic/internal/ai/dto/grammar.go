@@ -15,7 +15,7 @@ type GrammarMistake struct {
 
 // GrammarResponse is returned by AITutorService.CheckGrammar.
 type GrammarResponse struct {
-	Score         int              `json:"score"`        // 0–100
+	Score         int              `json:"score"` // 0–100
 	CorrectedText string           `json:"correctedText"`
 	Mistakes      []GrammarMistake `json:"mistakes"`
 	Tips          []string         `json:"tips"`
@@ -33,10 +33,10 @@ func (r *GrammarResponse) Validate() error {
 
 // VocabSuggestion is a single vocabulary improvement suggestion.
 type VocabSuggestion struct {
-	Original   string `json:"original"`
-	Suggested  string `json:"suggested"`
-	Reason     string `json:"reason"`
-	Example    string `json:"example"`
+	Original  string `json:"original"`
+	Suggested string `json:"suggested"`
+	Reason    string `json:"reason"`
+	Example   string `json:"example"`
 }
 
 // VocabSuggestionResponse is returned by AITutorService.SuggestWritingVocab.

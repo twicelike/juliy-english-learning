@@ -79,11 +79,10 @@ func (g *GeminiClient) parseJSONResponse(resp *genai.GenerateContentResponse, ds
 	return nil
 }
 
-
 func (g *GeminiClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	model := g.client.GenerativeModel(g.model)
 	// model.ResponseMIMEType = "application/json" // OMITTED for text
-	
+
 	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
 		return "", fmt.Errorf("gemini: generate content: %w", err)

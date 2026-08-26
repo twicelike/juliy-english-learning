@@ -143,7 +143,6 @@ func equalFold(a, b string) bool {
 	return true
 }
 
-
 func (r *retryClient) GenerateText(ctx context.Context, prompt string) (string, error) {
 	var resp string
 	var err error

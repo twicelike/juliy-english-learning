@@ -6,10 +6,10 @@ import { useAuthStore } from "@/features/auth";
 
 interface SenseExplanationProps {
   wordId: string;
-  senseIndex: number;
+  senseId: string;
 }
 
-export default function SenseExplanation({ wordId, senseIndex }: SenseExplanationProps) {
+export default function SenseExplanation({ wordId, senseId }: SenseExplanationProps) {
   const [loading, setLoading] = useState(false);
   const [explanation, setExplanation] = useState<BatchSenseExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function SenseExplanation({ wordId, senseIndex }: SenseExplanatio
     setLoading(true);
     setError(null);
     try {
-      const data = await AIAPI.explainSense({ wordId, senseIndex });
+      const data = await AIAPI.explainSense({ wordId, senseId });
       setExplanation(data);
     } catch (e: any) {
       setError(e?.message ?? "AI is unavailable right now.");

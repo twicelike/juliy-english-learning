@@ -41,10 +41,10 @@ type SubmissionRequestDTO struct {
 
 // EvaluationResponseDTO is the AI evaluation result returned to the frontend.
 type EvaluationResponseDTO struct {
-	Score             int                  `json:"score"`
-	Breakdown         EvaluationBreakdown  `json:"breakdown"`
-	CorrectedVersion  string               `json:"corrected_version"`
-	DetailedFeedback  string               `json:"detailed_feedback"`
+	Score            int                 `json:"score"`
+	Breakdown        EvaluationBreakdown `json:"breakdown"`
+	CorrectedVersion string              `json:"corrected_version"`
+	DetailedFeedback string              `json:"detailed_feedback"`
 }
 
 type EvaluationBreakdown struct {
@@ -84,4 +84,3 @@ type MissionHistoryDTO struct {
 	Score            int      `json:"score"`
 	CompletedAt      string   `json:"completed_at"`
 }
-

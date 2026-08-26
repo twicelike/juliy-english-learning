@@ -38,7 +38,7 @@ func main() {
 	// Admin CLI configuration
 	targetLang := "vi"
 	batchSize := 1000
-	
+
 	log.Printf("Starting bulk enqueue for language: %s", targetLang)
 
 	// Because dictionary might have ~430k words, we use a simple cursor or pagination.
@@ -65,7 +65,7 @@ func main() {
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		
+
 		batch = append(batch, doc.ID.Hex())
 
 		if len(batch) >= batchSize {

@@ -45,11 +45,11 @@ func (s *processingService) ProcessAttempt(ctx context.Context, attemptIDStr str
 		return err
 	}
 
-	// 1. Fetch attempt (we don't have GetAttemptByID without userID, but we can add one to repo or we can just fetch it. 
+	// 1. Fetch attempt (we don't have GetAttemptByID without userID, but we can add one to repo or we can just fetch it.
 	// Wait, the repo has `GetAttemptByID(ctx context.Context, userID, attemptID bson.ObjectID)`. We might need to bypass userID or find it.
 	// We can update Repository to add GetAttempt(ctx, attemptID). Let's assume we can fetch it, or we need to add it.)
 	// For now, let's assume we will add `GetAttempt(ctx context.Context, attemptID bson.ObjectID) (*SpeakingAttempt, error)` to Repository.
-	
+
 	attempt, err := s.repo.GetAttempt(ctx, attemptID)
 	if err != nil {
 		slog.Error("ProcessAttempt failed to fetch attempt", "error", err, "attemptID", attemptIDStr)
@@ -102,7 +102,7 @@ func (s *processingService) ProcessAttempt(ctx context.Context, attemptIDStr str
 	now := time.Now()
 	attempt.Status = AttemptCompleted
 	attempt.Transcript = resp.Transcript
-	
+
 	newUsedWords := make([]NewUsedWord, 0, len(resp.NewUsedVocabulary))
 	for _, vocab := range resp.NewUsedVocabulary {
 		wordID := ""
@@ -147,22 +147,22 @@ func (s *processingService) ProcessAttempt(ctx context.Context, attemptIDStr str
 	// Publish Evidence to Evaluation Engine
 	if s.evalSvc != nil {
 		ev := &evaluation.Evidence{
-			UserID:     attempt.UserID,
-			EventID:    attempt.ID.Hex(),
-			Skill:      "speaking",
-			Score:      float64(attempt.Evaluation.Overall),
-			Weight:     evaluation.WeightSpeaking,
-			Source:     evaluation.SourceSpeakingLab,
-			Metadata:   bson.M{"session_id": attempt.SessionID.Hex()},
+			UserID:   attempt.UserID,
+			EventID:  attempt.ID.Hex(),
+			Skill:    "speaking",
+			Score:    float64(attempt.Evaluation.Overall),
+			Weight:   evaluation.WeightSpeaking,
+			Source:   evaluation.SourceSpeakingLab,
+			Metadata: bson.M{"session_id": attempt.SessionID.Hex()},
 		}
-		
+
 		// Run in background to avoid blocking
 		go func(e *evaluation.Evidence, uid string) {
 			bgCtx := context.Background()
 			if err := s.evalSvc.RecordEvidence(bgCtx, e); err != nil {
 				slog.Error("ProcessAttempt failed to record evaluation evidence", "error", err, "attemptID", attemptIDStr)
 			}
-			
+
 			if s.publisher != nil {
 				_ = s.publisher.Publish(bgCtx, events.Event{
 					Type:   events.EventTypeProfileRefreshRequested,

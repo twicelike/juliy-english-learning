@@ -17,7 +17,7 @@ export interface ChoiceDTO {
 
 export interface SessionItemDTO {
   word_id: string;
-  sense_index: number;
+  sense_id: string;
   word: string;
   pos: string;
   ipa: string;
@@ -47,7 +47,7 @@ export type ProgressQuality = 1 | 3 | 4 | 5;
 
 export interface WordResult {
   word_id: string;
-  sense_index: number;
+  sense_id: string;
   flashcard_quality: ProgressQuality;
   multiple_choice_correct?: boolean;
   fill_blank_correct?: boolean;

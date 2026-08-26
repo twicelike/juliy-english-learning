@@ -21,11 +21,11 @@ func NewRepository(db *mongo.Database) ExplanationRepo {
 
 func (r *repository) GetSenseExplanation(ctx context.Context, wordID string, senseIndex int, level, nativeLang string, promptVersion int) (*SenseExplanation, error) {
 	filter := bson.M{
-		"word_id":         wordID,
-		"sense_index":     senseIndex,
-		"userLevel":       level,
-		"nativeLanguage":  nativeLang,
-		"prompt_version":  promptVersion,
+		"word_id":        wordID,
+		"sense_index":    senseIndex,
+		"userLevel":      level,
+		"nativeLanguage": nativeLang,
+		"prompt_version": promptVersion,
 	}
 	var doc SenseExplanation
 	err := r.coll.FindOne(ctx, filter).Decode(&doc)
@@ -40,10 +40,10 @@ func (r *repository) GetSenseExplanation(ctx context.Context, wordID string, sen
 
 func (r *repository) GetCachedSenseIndices(ctx context.Context, wordID string, level, nativeLang string, promptVersion int) (map[int]bool, error) {
 	filter := bson.M{
-		"word_id":         wordID,
-		"userLevel":       level,
-		"nativeLanguage":  nativeLang,
-		"prompt_version":  promptVersion,
+		"word_id":        wordID,
+		"userLevel":      level,
+		"nativeLanguage": nativeLang,
+		"prompt_version": promptVersion,
 	}
 
 	cursor, err := r.coll.Find(ctx, filter)
@@ -77,11 +77,11 @@ func (r *repository) SaveBatchSenseExplanations(ctx context.Context, explanation
 		}
 
 		filter := bson.M{
-			"word_id":         exp.WordID,
-			"sense_index":     exp.SenseIndex,
-			"userLevel":       exp.UserLevel,
-			"nativeLanguage":  exp.NativeLanguage,
-			"prompt_version":  exp.PromptVersion,
+			"word_id":        exp.WordID,
+			"sense_index":    exp.SenseIndex,
+			"userLevel":      exp.UserLevel,
+			"nativeLanguage": exp.NativeLanguage,
+			"prompt_version": exp.PromptVersion,
 		}
 
 		update := bson.M{"$set": exp}

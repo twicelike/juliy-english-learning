@@ -43,7 +43,7 @@ func (s *service) GetRandomTask(ctx context.Context, topic, difficulty, taskType
 	if difficulty == "" {
 		difficulty = "medium" // default difficulty
 	}
-	
+
 	resp, err := s.aiService.GenerateSpeakingTask(ctx, topic, taskType, difficulty)
 	if err != nil {
 		return nil, err

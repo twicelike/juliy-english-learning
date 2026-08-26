@@ -12,6 +12,7 @@
   --color-white: var(--theme-white);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-handwritten: "Comic Sans MS", "Chalkboard SE", "Comic Neue", sans-serif;
 }
 
 body {

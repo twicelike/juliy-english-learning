@@ -127,7 +127,11 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 		seenWords[w] = true
 
 		wordDocByID[wordDocs[i].ID] = &wordDocs[i]
-		allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseIndex: 0})
+		senseID := ""
+		if len(wordDocs[i].Senses) > 0 {
+			senseID = wordDocs[i].Senses[0].ID
+		}
+		allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseID: senseID})
 	}
 
 	// 3. Get existing progress for all bookmarked words
@@ -139,7 +143,7 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 	// 4. Prioritise: due words first, then new words
 	var dueRefs, newRefs []SessionItemRef
 	for _, ref := range allWordRefs {
-		key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
+		key := LearningProgressKey{WordID: ref.WordID, SenseID: ref.SenseID}
 		p, exists := progressMap[key]
 		if !exists {
 			newRefs = append(newRefs, ref)
@@ -186,13 +190,13 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 			continue
 		}
 
-		item, err := buildSessionItem(doc, ref.SenseIndex)
+		item, err := buildSessionItem(doc, ref.SenseID)
 		if err != nil {
 			continue
 		}
 
 		if mode == ModeQuiz {
-			choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseIndex, distractorPool)
+			choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseID, distractorPool)
 			if err != nil {
 				item.Choices = nil
 			} else {
@@ -232,34 +236,48 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 	var newAvailableRefs []SessionItemRef
 	if len(pendingIDs) < limit {
 		newLimit := limit - len(pendingIDs)
-		
+
 		bookmarks, err := s.userRepo.ListBookmarks(ctx, uid)
 		if err == nil && len(bookmarks) > 0 {
 			bookmarkWords := make([]string, 0, len(bookmarks))
 			for _, b := range bookmarks {
 				bookmarkWords = append(bookmarkWords, b.Word)
 			}
-			
+
 			wordDocs, _ := s.dictRepo.GetManyByWords(ctx, bookmarkWords)
-			
-			allWordRefs := make([]SessionItemRef, 0)
+
+			// Pre-fetch progress for all senses of these words
+			queryRefs := make([]SessionItemRef, 0, len(wordDocs))
+			for i := range wordDocs {
+				queryRefs = append(queryRefs, SessionItemRef{WordID: wordDocs[i].ID})
+			}
+			progressMap, _ := s.repo.GetProgressForWords(ctx, uid, queryRefs)
+
 			seenWords := make(map[string]bool)
 			for i := range wordDocs {
-				w := wordDocs[i].Word
-				if seenWords[w] {
+				doc := &wordDocs[i]
+				if seenWords[doc.Word] {
 					continue
 				}
-				seenWords[w] = true
-				allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseIndex: 0})
-			}
-			
-			progressMap, _ := s.repo.GetProgressForWords(ctx, uid, allWordRefs)
-			for _, ref := range allWordRefs {
-				key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
-				if _, exists := progressMap[key]; !exists {
-					newAvailableRefs = append(newAvailableRefs, ref)
-					if len(newAvailableRefs) == newLimit {
-						break
+				seenWords[doc.Word] = true
+
+				// Group progresses for THIS word
+				wordProgresses := make(map[string]*LearningProgress)
+				for k, p := range progressMap {
+					if k.WordID == doc.ID {
+						wordProgresses[k.SenseID] = p
+					}
+				}
+
+				// Progressive Discovery Policy
+				nextSense := DiscoverNextSense(doc, wordProgresses)
+				if nextSense != nil {
+					if _, exists := wordProgresses[nextSense.ID]; !exists {
+						ref := SessionItemRef{WordID: doc.ID, SenseID: nextSense.ID}
+						newAvailableRefs = append(newAvailableRefs, ref)
+						if len(newAvailableRefs) == newLimit {
+							break
+						}
 					}
 				}
 			}
@@ -301,12 +319,8 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
-			wids := make([]bson.ObjectID, len(refs))
-			for i, r := range refs {
-				wids[i] = r.WordID
-			}
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
 		}
 		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
 	}(session.ID, sessionRefs)
@@ -368,12 +382,8 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
-			wids := make([]bson.ObjectID, len(refs))
-			for i, r := range refs {
-				wids[i] = r.WordID
-			}
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
 		}
 		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
 	}(session.ID, dueIDs)
@@ -416,11 +426,11 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 			if isValid {
 				currentWordIDs := make(map[string]bool)
 				for _, ref := range wordIDs {
-					key := fmt.Sprintf("%s:%d", ref.WordID.Hex(), ref.SenseIndex)
+					key := fmt.Sprintf("%s:%s", ref.WordID.Hex(), ref.SenseID)
 					currentWordIDs[key] = true
 				}
 				for _, item := range active.Items {
-					key := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
+					key := fmt.Sprintf("%s:%s", item.WordID.Hex(), item.SenseID)
 					if !currentWordIDs[key] {
 						isValid = false
 						break
@@ -449,7 +459,7 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	var due, learning, newWords []SessionItemRef
 	now := time.Now()
 	for _, ref := range wordIDs {
-		key := LearningProgressKey{WordID: ref.WordID, SenseIndex: ref.SenseIndex}
+		key := LearningProgressKey{WordID: ref.WordID, SenseID: ref.SenseID}
 		p, exists := progressMap[key]
 		if !exists {
 			newWords = append(newWords, ref)
@@ -503,13 +513,8 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	go func(sid bson.ObjectID, refs []SessionItemRef) {
 		bgCtx := context.Background()
 		if s.exSvc != nil {
-			// Extract WordIDs for exercise generation
-			wids := make([]bson.ObjectID, len(refs))
-			for i, r := range refs {
-				wids[i] = r.WordID
-			}
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, wids, ExerciseFillBlank, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
+			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
 		}
 		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
 	}(session.ID, selectedIDs)
@@ -517,7 +522,6 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 	// 8. Build DTO
 	return s.buildSessionDTO(ctx, session)
 }
-
 
 func (s *service) GetSessionByID(ctx context.Context, sessionID string) (*SessionDTO, error) {
 	sid, err := bson.ObjectIDFromHex(sessionID)
@@ -553,11 +557,11 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 	for i := range wordDocs {
 		wordDocByID[wordDocs[i].ID] = &wordDocs[i]
 	}
-	
+
 	// Fetch ONLY Fill Blank Exercises via AI
-	var fbExercises map[bson.ObjectID][]ExerciseContent
+	var fbExercises map[string][]ExerciseContent
 	if s.exSvc != nil {
-		fbExercises, _ = s.exSvc.GetExercises(ctx, wordIDs, ExerciseFillBlank, 1)
+		fbExercises, _ = s.exSvc.GetExercises(ctx, session.Items, ExerciseFillBlank, 1)
 	}
 
 	// ---------------------------------------------------------
@@ -588,27 +592,27 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 			continue
 		}
 
-		item, err := buildSessionItem(doc, ref.SenseIndex)
+		item, err := buildSessionItem(doc, ref.SenseID)
 		if err != nil {
 			continue // Skip corrupted item
 		}
-		
+
 		// Inject MCQ via Database (Fast, no AI tokens)
-		choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseIndex, distractorPool)
+		choices, err := s.buildQuizChoicesFromPool(doc, ref.SenseID, distractorPool)
 		if err == nil {
 			item.Choices = choices
 		}
 
 		// Inject Fill Blank
-		if fbExercises != nil && len(fbExercises[id]) > 0 {
-			ex := fbExercises[id][0]
+		exKey := id.Hex() + ":" + ref.SenseID
+		if fbExercises != nil && len(fbExercises[exKey]) > 0 {
+			ex := fbExercises[exKey][0]
 			item.FillBlankQuestion = ex.Question
 			item.FillBlankAnswer = ex.Answer
 		}
 
 		items = append(items, item)
 	}
-
 
 	// Enrich translations and annotations
 	if s.enricher != nil {
@@ -666,12 +670,12 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 	var reviews []*Review
 	var evidences []*evaluation.Evidence
 	totalXP := 0
-	
+
 	// Pre-fetch all progresses for these words to update them
 	refs := make([]SessionItemRef, len(req.Results))
 	for i, r := range req.Results {
 		w, _ := bson.ObjectIDFromHex(r.WordID)
-		refs[i] = SessionItemRef{WordID: w, SenseIndex: r.SenseIndex}
+		refs[i] = SessionItemRef{WordID: w, SenseID: r.SenseID}
 	}
 	progressMap, err := s.repo.GetProgressForWords(ctx, uid, refs)
 	if err != nil {
@@ -705,17 +709,17 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 
 		// A. Evaluate Evidence (for SRS scheduling)
 		assessment := EvaluateLearningEvidence(res)
-		
+
 		// B. Retrieve or create Progress
-		key := LearningProgressKey{WordID: wid, SenseIndex: res.SenseIndex}
+		key := LearningProgressKey{WordID: wid, SenseID: res.SenseID}
 		p, exists := progressMap[key]
 		if !exists {
 			p = &LearningProgress{
-				ID:         bson.NewObjectID(),
-				UserID:     uid,
-				WordID:     wid,
-				SenseIndex: res.SenseIndex,
-				CreatedAt:  now,
+				ID:        bson.NewObjectID(),
+				UserID:    uid,
+				WordID:    wid,
+				SenseID:   res.SenseID,
+				CreatedAt: now,
 			}
 		}
 
@@ -727,18 +731,18 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 
 		// D. Build Review Log
 		rev := &Review{
-			ID:             bson.NewObjectID(),
-			UserID:         uid,
-			WordID:         wid,
-			SenseIndex:     res.SenseIndex,
-			Quality:        quality,
-			OldInterval:    p.Interval,
-			NewInterval:    nextP.Interval,
-			OldEF:          p.EaseFactor,
-			NewEF:          nextP.EaseFactor,
-			OldRepetition:  p.Repetition,
-			NewRepetition:  nextP.Repetition,
-			ReviewedAt:     now,
+			ID:            bson.NewObjectID(),
+			UserID:        uid,
+			WordID:        wid,
+			SenseID:       res.SenseID,
+			Quality:       quality,
+			OldInterval:   p.Interval,
+			NewInterval:   nextP.Interval,
+			OldEF:         p.EaseFactor,
+			NewEF:         nextP.EaseFactor,
+			OldRepetition: p.Repetition,
+			NewRepetition: nextP.Repetition,
+			ReviewedAt:    now,
 		}
 		reviews = append(reviews, rev)
 
@@ -756,7 +760,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 			Score:      qualityToScore(res.FlashcardQuality),
 			Weight:     evaluation.WeightReview,
 			Source:     evaluation.SourceLearningSession,
-			Metadata:   bson.M{"exercise_type": "flashcard", "word_id": res.WordID, "session_id": sessionID, "quality": res.FlashcardQuality},
+			Metadata:   bson.M{"exercise_type": "flashcard", "word_id": res.WordID, "sense_id": res.SenseID, "session_id": sessionID, "quality": res.FlashcardQuality},
 			OccurredAt: now,
 		})
 
@@ -773,7 +777,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 				Score:      score,
 				Weight:     evaluation.WeightReview,
 				Source:     evaluation.SourceLearningSession,
-				Metadata:   bson.M{"exercise_type": "mcq", "word_id": res.WordID, "session_id": sessionID, "correct": *res.MultipleChoiceCorrect},
+				Metadata:   bson.M{"exercise_type": "mcq", "word_id": res.WordID, "sense_id": res.SenseID, "session_id": sessionID, "correct": *res.MultipleChoiceCorrect},
 				OccurredAt: now,
 			})
 		}
@@ -791,7 +795,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 				Score:      score,
 				Weight:     evaluation.WeightReview,
 				Source:     evaluation.SourceLearningSession,
-				Metadata:   bson.M{"exercise_type": "fill_blank", "word_id": res.WordID, "session_id": sessionID, "correct": *res.FillBlankCorrect},
+				Metadata:   bson.M{"exercise_type": "fill_blank", "word_id": res.WordID, "sense_id": res.SenseID, "session_id": sessionID, "correct": *res.FillBlankCorrect},
 				OccurredAt: now,
 			})
 		}
@@ -808,7 +812,7 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 		go func(evs []*evaluation.Evidence) {
 			bgCtx := context.Background()
 			_ = s.evalSvc.RecordEvidences(bgCtx, evs)
-			
+
 			// Publish profile refresh event after evidences are recorded
 			if s.publisher != nil {
 				_ = s.publisher.Publish(bgCtx, events.Event{
@@ -824,19 +828,19 @@ func (s *service) SubmitSessionResults(ctx context.Context, userID string, sessi
 	if s.gamiSvc != nil {
 		go func() {
 			bgCtx := context.Background()
-			
+
 			activity := gamification.ActivityReview
 			if session.Mode == "new_words" {
 				activity = gamification.ActivityLearnNew
 			}
-			
+
 			correctCount := 0
 			for _, r := range req.Results {
 				if r.FlashcardQuality >= 3 {
 					correctCount++
 				}
 			}
-			
+
 			_ = s.gamiSvc.TrackActivity(bgCtx, userID, activity, len(req.Results), correctCount, totalXP, 20)
 		}()
 	}
@@ -856,9 +860,16 @@ func (s *service) DebugAdvanceTime(ctx context.Context, userID string, days int)
 // Private helpers
 // -----------------------------------------------------------------------------
 
-func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItemDTO, error) {
-	if senseIndex < 0 || senseIndex >= len(doc.Senses) {
-		return SessionItemDTO{}, errors.New("invalid sense_index")
+func buildSessionItem(doc *dictionary.WordDocument, senseID string) (SessionItemDTO, error) {
+	var sense *dictionary.SenseDoc
+	for i, s := range doc.Senses {
+		if s.ID == senseID {
+			sense = &doc.Senses[i]
+			break
+		}
+	}
+	if sense == nil {
+		return SessionItemDTO{}, errors.New("invalid sense_id")
 	}
 
 	// Extract IPA from first sound
@@ -872,8 +883,7 @@ func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItem
 
 	var defs []string
 	var example string
-	
-	sense := doc.Senses[senseIndex]
+
 	if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
 		defs = append(defs, sense.Glosses[0])
 		if len(sense.Examples) > 0 {
@@ -883,7 +893,7 @@ func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItem
 
 	return SessionItemDTO{
 		WordID:      doc.ID.Hex(),
-		SenseIndex:  senseIndex,
+		SenseID:     senseID,
 		Word:        doc.Word,
 		POS:         doc.POS,
 		IPA:         ipa,
@@ -892,16 +902,20 @@ func buildSessionItem(doc *dictionary.WordDocument, senseIndex int) (SessionItem
 	}, nil
 }
 
-
-
-func (s *service) buildQuizChoicesFromPool(doc *dictionary.WordDocument, senseIndex int, pool map[string][]dictionary.WordDocument) ([]ChoiceDTO, error) {
-	if senseIndex < 0 || senseIndex >= len(doc.Senses) {
-		return nil, errors.New("invalid sense_index")
+func (s *service) buildQuizChoicesFromPool(doc *dictionary.WordDocument, senseID string, pool map[string][]dictionary.WordDocument) ([]ChoiceDTO, error) {
+	var sense *dictionary.SenseDoc
+	for i, s := range doc.Senses {
+		if s.ID == senseID {
+			sense = &doc.Senses[i]
+			break
+		}
+	}
+	if sense == nil {
+		return nil, errors.New("invalid sense_id")
 	}
 
 	// Correct answer: gloss of the specific sense
 	correctDef := ""
-	sense := doc.Senses[senseIndex]
 	if len(sense.Glosses) > 0 && sense.Glosses[0] != "" {
 		correctDef = sense.Glosses[0]
 	}
@@ -922,7 +936,7 @@ func (s *service) buildQuizChoicesFromPool(doc *dictionary.WordDocument, senseIn
 			remaining = append(remaining, d)
 			continue
 		}
-		
+
 		def := ""
 		for _, sense := range d.Senses {
 			if len(sense.Glosses) > 0 {
@@ -935,7 +949,7 @@ func (s *service) buildQuizChoicesFromPool(doc *dictionary.WordDocument, senseIn
 			used++
 		}
 	}
-	
+
 	pool[doc.POS] = remaining
 
 	// Shuffle choices so correct answer isn't always first

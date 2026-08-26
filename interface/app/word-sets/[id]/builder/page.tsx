@@ -17,7 +17,7 @@ export default function WordSetBuilderPage() {
   const [searchResults, setSearchResults] = useState<WordDTO[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const [selectedItems, setSelectedItems] = useState<Map<string, {word_id: string, sense_index: number}>>(new Map());
+  const [selectedItems, setSelectedItems] = useState<Map<string, {word_id: string, sense_id: string}>>(new Map());
   const [existingItems, setExistingItems] = useState<Set<string>>(new Set());
   
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +34,7 @@ export default function WordSetBuilderPage() {
       const existing = new Set<string>();
       if (res.saved_senses) {
         res.saved_senses.forEach((s) => {
-          existing.add(`${s.word_id}:${s.sense_index}`);
+          existing.add(`${s.word_id}:${s.sense_id}`);
         });
       }
       setExistingItems(existing);
@@ -76,14 +76,14 @@ export default function WordSetBuilderPage() {
     e.preventDefault();
   };
 
-  const toggleItem = (wordId: string, senseIndex: number) => {
+  const toggleItem = (wordId: string, senseIndex: string) => {
     setSelectedItems(prev => {
       const next = new Map(prev);
       const key = `${wordId}:${senseIndex}`;
       if (next.has(key)) {
         next.delete(key);
       } else {
-        next.set(key, { word_id: wordId, sense_index: senseIndex });
+        next.set(key, { word_id: wordId, sense_id: senseIndex });
       }
       return next;
     });
@@ -165,16 +165,16 @@ export default function WordSetBuilderPage() {
                   </div>
                   <div className="p-2 space-y-1">
                     {word.definitions
-                      ?.filter((def, idx, arr) => arr.findIndex(d => d.sense_index === def.sense_index && (d.word_id || word.id) === (def.word_id || word.id)) === idx)
+                      ?.filter((def, idx, arr) => arr.findIndex(d => d.sense_id === def.sense_id && (d.word_id || word.id) === (def.word_id || word.id)) === idx)
                       .map((def) => {
-                      const key = `${def.word_id || word.id}:${def.sense_index}`;
+                      const key = `${def.word_id || word.id}:${def.sense_id}`;
                       const isSelected = selectedItems.has(key);
                       const isExisting = existingItems.has(key);
                       return (
                         <div 
                           key={key}
                           onClick={() => {
-                            if (!isExisting) toggleItem(def.word_id || word.id, def.sense_index);
+                            if (!isExisting) toggleItem(def.word_id || word.id, def.sense_id);
                           }}
                           className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
                             isExisting ? "opacity-50 cursor-not-allowed" :

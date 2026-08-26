@@ -12,7 +12,7 @@ func (r *repository) SuspendWord(ctx context.Context, userID bson.ObjectID, word
 	filter := bson.M{"user_id": userID, "word_id": wordID}
 	update := bson.M{
 		"$set": bson.M{
-			"interval": -1,
+			"interval":   -1,
 			"updated_at": time.Now().UTC(),
 		},
 		"$setOnInsert": bson.M{

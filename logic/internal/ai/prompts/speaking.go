@@ -51,7 +51,7 @@ func BuildSpeakingEvaluationPrompt(taskSnapshotJSON string) string {
 
 	builder.WriteString("You are an expert IELTS and English language evaluator.\n")
 	builder.WriteString("You have been provided with an audio recording of a student speaking.\n\n")
-	
+
 	builder.WriteString("Here is the context of the task they were given:\n")
 	builder.WriteString(taskSnapshotJSON)
 	builder.WriteString("\n\n")
@@ -80,6 +80,6 @@ func BuildSpeakingEvaluationPrompt(taskSnapshotJSON string) string {
     }
   ]
 }`)
-	
+
 	return builder.String()
 }

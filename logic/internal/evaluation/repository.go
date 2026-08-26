@@ -80,7 +80,7 @@ func (r *repository) GetEvidencesBySkill(ctx context.Context, userIDStr string, 
 
 func (r *repository) EnsureIndexes(ctx context.Context) error {
 	coll := r.getCollection()
-	
+
 	indexes := []mongo.IndexModel{
 		// Unique index to prevent duplicate evidence for the same event
 		{

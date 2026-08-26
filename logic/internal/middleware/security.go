@@ -17,7 +17,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
 		// Referrer policy
 		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		
+
 		c.Next()
 	}
 }

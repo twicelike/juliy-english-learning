@@ -3,6 +3,7 @@ package dictionary
 import (
 	"context"
 	"crypto/md5"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -18,6 +19,23 @@ func NewRepository(db *mongo.Database) Repository {
 	return &repository{
 		coll: db.Collection("words"),
 	}
+}
+
+// EnsureIndexes creates indexes needed for efficient queries.
+func (r *repository) EnsureIndexes(ctx context.Context) error {
+	// Compound index: covers GetTopWordsNotIn (sort by frequency_score, filter by pos)
+	// frequency_score must be first to avoid in-memory sorting over $in array.
+	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "frequency_score", Value: -1},
+			{Key: "pos", Value: 1},
+		},
+		Options: options.Index().SetName("frequency_score_pos"),
+	})
+	if err != nil {
+		return fmt.Errorf("dictionary.EnsureIndexes (pos_frequency_score): %w", err)
+	}
+	return nil
 }
 
 func (r *repository) SearchPrefix(ctx context.Context, prefix string, limit int) ([]WordDocument, error) {
@@ -41,8 +59,8 @@ func (r *repository) SearchPrefix(ctx context.Context, prefix string, limit int)
 		SetLimit(int64(limit)).
 		SetSort(bson.D{{Key: "word", Value: 1}}).
 		SetCollation(&options.Collation{Locale: "en", Strength: 2})
-	
-	// We only need the 'word' field for search suggestions, but the schema has more. 
+
+	// We only need the 'word' field for search suggestions, but the schema has more.
 	// The plan mentions returning WordDTOs, so we'll fetch the whole doc or a projection.
 	// For now, let's fetch the full document to map to DTO in service.
 	cursor, err := r.coll.Find(ctx, filter, opts)
@@ -79,7 +97,36 @@ func (r *repository) GetWords(ctx context.Context, word string) ([]WordDocument,
 		return nil, err
 	}
 	defer cursor.Close(ctx)
+
+	var docs []WordDocument
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+func (r *repository) GetTopWordsNotIn(ctx context.Context, excludeIDs []bson.ObjectID, limit int) ([]WordDocument, error) {
+	validPOS := []string{"noun", "verb", "adjective", "adverb", "phrasal verb"}
 	
+	filter := bson.M{
+		"pos": bson.M{"$in": validPOS},
+	}
+	
+	if len(excludeIDs) > 0 {
+		filter["_id"] = bson.M{"$nin": excludeIDs}
+	}
+	// Sort by top-level frequency_score (denormalized from senses[0].quality.frequency_score)
+	// This field is indexed via {pos, frequency_score} compound index.
+	opts := options.Find().
+		SetLimit(int64(limit)).
+		SetSort(bson.D{{Key: "frequency_score", Value: -1}})
+
+	cursor, err := r.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
 	var docs []WordDocument
 	if err := cursor.All(ctx, &docs); err != nil {
 		return nil, err
@@ -110,7 +157,7 @@ func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 
 func (r *repository) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDocument, error) {
 	filter := bson.M{"pos": bson.M{"$ne": "name"}}
-	
+
 	// 1. Get total count of words
 	count, err := r.coll.CountDocuments(ctx, filter)
 	if err != nil {
@@ -224,7 +271,7 @@ func (r *repository) GetDistractorsBulk(ctx context.Context, pos string, exclude
 	if len(excludeIDs) == 0 {
 		excludeIDs = []bson.ObjectID{bson.NewObjectID()}
 	}
-	
+
 	filter := bson.D{
 		{Key: "pos", Value: pos},
 		{Key: "_id", Value: bson.M{"$nin": excludeIDs}},

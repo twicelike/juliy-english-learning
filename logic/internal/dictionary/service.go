@@ -94,7 +94,7 @@ func (s *service) GetDetail(ctx context.Context, word string) (*WordDTO, error) 
 	if len(docs) == 0 {
 		return nil, nil // Not found
 	}
-	
+
 	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
@@ -136,14 +136,14 @@ func (s *service) GetRandom(ctx context.Context) (*WordDTO, error) {
 	if doc == nil {
 		return nil, nil
 	}
-	
+
 	// Fetch all POS variants for this random word
 	docs, err := s.repo.GetWords(ctx, doc.Word)
 	if err != nil || len(docs) == 0 {
 		dto := mapToDTO(doc)
 		return &dto, nil
 	}
-	
+
 	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
@@ -156,14 +156,14 @@ func (s *service) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDTO
 	if doc == nil {
 		return nil, nil
 	}
-	
+
 	// Fetch all POS variants for this word of the day
 	docs, err := s.repo.GetWords(ctx, doc.Word)
 	if err != nil || len(docs) == 0 {
 		dto := mapToDTO(doc)
 		return &dto, nil
 	}
-	
+
 	dto := mapDocsToDTO(docs)
 	return &dto, nil
 }
@@ -171,13 +171,14 @@ func (s *service) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDTO
 // mapToDTO converts a WordDocument to a WordDTO exactly matching the frontend needs.
 func mapToDTO(doc *WordDocument) WordDTO {
 	dto := WordDTO{
-		ID:          doc.ID.Hex(),
-		Word:        doc.Word,
-		POS:         doc.POS,
-		Forms:       []string{},
-		Definitions: []DefinitionDTO{},
-		Antonyms:    []string{},
-		Synonyms:    []string{},
+		ID:             doc.ID.Hex(),
+		Word:           doc.Word,
+		POS:            doc.POS,
+		FrequencyScore: doc.FrequencyScore,
+		Forms:          []string{},
+		Definitions:    []DefinitionDTO{},
+		Antonyms:       []string{},
+		Synonyms:       []string{},
 	}
 
 	// 1. Extract IPA and Audio (first available)
@@ -200,6 +201,7 @@ func mapToDTO(doc *WordDocument) WordDTO {
 		for _, gloss := range sense.Glosses {
 			defDTO := DefinitionDTO{
 				WordID:       doc.ID.Hex(),
+				SenseID:      sense.ID,
 				SenseIndex:   i,
 				PartOfSpeech: doc.POS,
 				Definition:   gloss,
@@ -250,7 +252,7 @@ func mapDocsToDTO(docs []WordDocument) WordDTO {
 	formSet := make(map[string]bool)
 	antonymSet := make(map[string]bool)
 	synonymSet := make(map[string]bool)
-	
+
 	var posList []string
 	posSet := make(map[string]bool)
 
@@ -283,6 +285,7 @@ func mapDocsToDTO(docs []WordDocument) WordDTO {
 			for _, gloss := range sense.Glosses {
 				defDTO := DefinitionDTO{
 					WordID:       doc.ID.Hex(),
+					SenseID:      sense.ID,
 					SenseIndex:   i,
 					PartOfSpeech: doc.POS,
 					Definition:   gloss,

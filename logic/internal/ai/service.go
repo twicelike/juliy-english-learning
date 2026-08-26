@@ -155,7 +155,7 @@ func (s *service) ExplainSense(ctx context.Context, wordID string, senseIndex in
 			UsageNote:      exp.UsageNote,
 			PromptVersion:  ExplainPromptVersion,
 		})
-		
+
 		if exp.SenseIndex == senseIndex {
 			expCopy := exp // Copy to avoid pointer issues
 			targetResponse = &expCopy

@@ -25,31 +25,31 @@ func NewExerciseContentService(repo ExerciseContentRepository, dictRepo dictiona
 	}
 }
 
-// GetExercises returns exercises for the given words. 
+// GetExercises returns exercises for the given words.
 // If the DB pool is insufficient, it uses the AI client to generate and save more.
-func (s *exerciseContentService) GetExercises(ctx context.Context, wordIDs []bson.ObjectID, exType ExerciseType, limitPerWord int) (map[bson.ObjectID][]ExerciseContent, error) {
+func (s *exerciseContentService) GetExercises(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error) {
 	// 1. Fetch from DB pool
-	pool, err := s.repo.GetRandomExercises(ctx, wordIDs, exType, limitPerWord)
+	pool, err := s.repo.GetRandomExercises(ctx, refs, exType, limitPerWord)
 	if err != nil {
 		return nil, err
 	}
 
 	if pool == nil {
-		pool = make(map[bson.ObjectID][]ExerciseContent)
+		pool = make(map[string][]ExerciseContent)
 	}
 
 	// 2. Identify words that need more exercises
-	var missingWordIDs []bson.ObjectID
-	for _, wid := range wordIDs {
-		if len(pool[wid]) < limitPerWord {
-			missingWordIDs = append(missingWordIDs, wid)
+	var missingRefs []SessionItemRef
+	for _, ref := range refs {
+		key := ref.WordID.Hex() + ":" + ref.SenseID
+		if len(pool[key]) < limitPerWord {
+			missingRefs = append(missingRefs, ref)
 		}
 	}
 
 	// 3. Generate missing exercises via AI
-	if len(missingWordIDs) > 0 && s.aiClient != nil {
-		// Note: We'll implement batch AI generation shortly
-		err := s.generateAndSaveMissing(ctx, missingWordIDs, pool, exType, limitPerWord)
+	if len(missingRefs) > 0 && s.aiClient != nil {
+		err := s.generateAndSaveMissing(ctx, missingRefs, pool, exType, limitPerWord)
 		if err != nil {
 			// Log error, but we still return whatever we have in the pool so the user can continue learning
 		}
@@ -58,10 +58,15 @@ func (s *exerciseContentService) GetExercises(ctx context.Context, wordIDs []bso
 	return pool, nil
 }
 
-func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, missingWordIDs []bson.ObjectID, pool map[bson.ObjectID][]ExerciseContent, exType ExerciseType, limitPerWord int) error {
+func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, missingRefs []SessionItemRef, pool map[string][]ExerciseContent, exType ExerciseType, limitPerWord int) error {
 	maxRetries := 3
 
 	// Resolve words from dictionary for the prompt
+	var missingWordIDs []bson.ObjectID
+	for _, ref := range missingRefs {
+		missingWordIDs = append(missingWordIDs, ref.WordID)
+	}
+
 	wordDocs, err := s.dictRepo.GetManyByIDs(ctx, missingWordIDs)
 	if err != nil {
 		return err
@@ -73,25 +78,41 @@ func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, mis
 
 	for retry := 0; retry < maxRetries; retry++ {
 		var contexts []WordGenerationContext
-		var currentBatchIDs []bson.ObjectID
+		var currentBatchRefs []SessionItemRef
 
-		for _, wid := range missingWordIDs {
-			needed := limitPerWord - len(pool[wid])
+		for _, ref := range missingRefs {
+			key := ref.WordID.Hex() + ":" + ref.SenseID
+			needed := limitPerWord - len(pool[key])
 			if needed > 0 {
-				doc, ok := wordMap[wid]
+				doc, ok := wordMap[ref.WordID]
 				if !ok {
+					continue
+				}
+
+				// Find exact sense
+				var targetSense *dictionary.SenseDoc
+				for i := range doc.Senses {
+					if doc.Senses[i].ID == ref.SenseID {
+						targetSense = &doc.Senses[i]
+						break
+					}
+				}
+
+				if targetSense == nil {
+					// DO NOT fallback to Senses[0].
+					// Skip generating exercise for this invalid SenseID.
 					continue
 				}
 
 				// Build context
 				def := ""
-				if len(doc.Senses) > 0 && len(doc.Senses[0].Glosses) > 0 {
-					def = doc.Senses[0].Glosses[0]
+				if len(targetSense.Glosses) > 0 {
+					def = targetSense.Glosses[0]
 				}
 
 				// Gather existing sentences to prevent duplicates
 				var existing []string
-				for _, ex := range pool[wid] {
+				for _, ex := range pool[key] {
 					if ex.Sentence != "" {
 						existing = append(existing, ex.Sentence)
 					} else if ex.Question != "" {
@@ -100,20 +121,29 @@ func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, mis
 				}
 
 				for i := 0; i < needed; i++ {
+					reqID := bson.NewObjectID().Hex() // unique ID to match AI response
 					contexts = append(contexts, WordGenerationContext{
-						WordID:            wid,
+						ReqID:             reqID,
+						WordID:            ref.WordID,
+						SenseID:           ref.SenseID,
 						Word:              doc.Word,
 						POS:               doc.POS,
 						Definition:        def,
 						ExistingSentences: existing,
 					})
-					currentBatchIDs = append(currentBatchIDs, wid)
+					currentBatchRefs = append(currentBatchRefs, ref)
 				}
 			}
 		}
 
 		if len(contexts) == 0 {
 			break // all done
+		}
+
+		// Create map of req_id to contexts for quick lookup
+		reqMap := make(map[string]WordGenerationContext)
+		for _, c := range contexts {
+			reqMap[c.ReqID] = c
 		}
 
 		if exType == ExerciseFillBlank {
@@ -127,25 +157,27 @@ func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, mis
 				if err := validateFillBlankItem(ex); err != nil {
 					continue
 				}
-				wid, err := bson.ObjectIDFromHex(ex.WordID)
-				if err != nil {
+				ctxData, ok := reqMap[ex.ReqID]
+				if !ok {
 					continue
 				}
 
 				hash := generateContentHash(ex.Question)
 				content := &ExerciseContent{
-					WordID:        wid,
+					WordID:        ctxData.WordID,
+					SenseID:       ctxData.SenseID,
 					Type:          exType,
 					Question:      ex.Question,
 					Answer:        ex.Answer,
 					ContentHash:   hash,
-					PromptVersion: 1, // L4 Version
+					PromptVersion: 2, // Sense-aware Version
 				}
 
 				if err := s.repo.Save(ctx, content); err != nil {
 					continue // Likely Duplicate Key Error
 				}
-				pool[wid] = append(pool[wid], *content)
+				key := ctxData.WordID.Hex() + ":" + ctxData.SenseID
+				pool[key] = append(pool[key], *content)
 			}
 
 		} else if exType == ExerciseMultipleChoice {
@@ -159,8 +191,8 @@ func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, mis
 				if err := validateMCQItem(ex); err != nil {
 					continue
 				}
-				wid, err := bson.ObjectIDFromHex(ex.WordID)
-				if err != nil {
+				ctxData, ok := reqMap[ex.ReqID]
+				if !ok {
 					continue
 				}
 
@@ -168,18 +200,20 @@ func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, mis
 				hashData := strings.Join(ex.Choices, "|") + "|" + ex.Answer
 				hash := generateContentHash(hashData)
 				content := &ExerciseContent{
-					WordID:        wid,
+					WordID:        ctxData.WordID,
+					SenseID:       ctxData.SenseID,
 					Type:          exType,
 					Choices:       ex.Choices,
 					Answer:        ex.Answer,
 					ContentHash:   hash,
-					PromptVersion: 1, // L4 Version
+					PromptVersion: 2, // Sense-aware Version
 				}
 
 				if err := s.repo.Save(ctx, content); err != nil {
 					continue // Likely Duplicate Key Error
 				}
-				pool[wid] = append(pool[wid], *content)
+				key := ctxData.WordID.Hex() + ":" + ctxData.SenseID
+				pool[key] = append(pool[key], *content)
 			}
 		}
 	}

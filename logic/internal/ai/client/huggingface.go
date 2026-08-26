@@ -13,6 +13,13 @@ import (
 // cleanJSON removes markdown code blocks like ```json ... ``` if they exist.
 func cleanJSON(s string) string {
 	s = strings.TrimSpace(s)
+
+	// Remove <think>...</think> block if present (e.g., DeepSeek reasoning models)
+	if idx := strings.Index(s, "</think>"); idx != -1 {
+		s = s[idx+len("</think>"):]
+		s = strings.TrimSpace(s)
+	}
+
 	if strings.HasPrefix(s, "```json") {
 		s = strings.TrimPrefix(s, "```json")
 	} else if strings.HasPrefix(s, "```") {
@@ -76,9 +83,9 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 		Messages: []hfMsg{
 			{Role: "user", Content: prompt},
 		},
-		Temperature:    0.2, // low temp for deterministic JSON
-		MaxTokens:      2048,
-		Stream:         false,
+		Temperature: 0.2, // low temp for deterministic JSON
+		MaxTokens:   2048,
+		Stream:      false,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -132,9 +139,9 @@ func (c *HuggingFaceClient) GenerateText(ctx context.Context, prompt string) (st
 		Messages: []hfMsg{
 			{Role: "user", Content: prompt},
 		},
-		Temperature:    0.2, // low temp for deterministic JSON
-		MaxTokens:      2048,
-		Stream:         false,
+		Temperature: 0.2, // low temp for deterministic JSON
+		MaxTokens:   2048,
+		Stream:      false,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

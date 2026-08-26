@@ -13,12 +13,12 @@ export function AddToSetModal({ word, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   
-  const uniqueDefs = word.definitions?.filter((def, i, arr) => arr.findIndex(d => d.sense_index === def.sense_index && (d.word_id || word.id) === (def.word_id || word.id)) === i) || [];
+  const uniqueDefs = word.definitions?.filter((def, i, arr) => arr.findIndex(d => d.sense_id === def.sense_id && (d.word_id || word.id) === (def.word_id || word.id)) === i) || [];
   const posList = Array.from(new Set(uniqueDefs.map(d => d.partOfSpeech || "Other")));
   
   const [activeTab, setActiveTab] = useState<string>(posList[0] || "Other");
   const [selectedDefs, setSelectedDefs] = useState<Set<string>>(new Set(
-    uniqueDefs.length > 0 ? [`${uniqueDefs[0].word_id || word.id}:${uniqueDefs[0].sense_index}`] : []
+    uniqueDefs.length > 0 ? [`${uniqueDefs[0].word_id || word.id}:${uniqueDefs[0].sense_id}`] : []
   ));
   
   const [mounted, setMounted] = useState(false);
@@ -40,7 +40,7 @@ export function AddToSetModal({ word, onClose }: Props) {
       const alreadySaved = new Set<string>();
       items.forEach(set => {
         (set.saved_senses || []).forEach(s => {
-          alreadySaved.add(`${s.word_id}:${s.sense_index}`);
+          alreadySaved.add(`${s.word_id}:${s.sense_id}`);
         });
       });
       // If we found any saved senses across the sets, pre-select them.
@@ -87,7 +87,7 @@ export function AddToSetModal({ word, onClose }: Props) {
         // Otherwise, they just wanted to update the meanings. Add the selected ones.
         const items = Array.from(selectedDefs).map(key => {
           const [wId, sIdx] = key.split(":");
-          return { word_id: wId, sense_index: Number(sIdx) };
+          return { word_id: wId, sense_id: sIdx };
         });
         
         await WordSetAPI.bulkAddWords(set.id, items);
@@ -104,7 +104,7 @@ export function AddToSetModal({ word, onClose }: Props) {
         
         const items = Array.from(selectedDefs).map(key => {
           const [wId, sIdx] = key.split(":");
-          return { word_id: wId, sense_index: Number(sIdx) };
+          return { word_id: wId, sense_id: sIdx };
         });
         
         await WordSetAPI.bulkAddWords(set.id, items);
@@ -158,7 +158,7 @@ export function AddToSetModal({ word, onClose }: Props) {
               {uniqueDefs
                 .filter(def => (def.partOfSpeech || "Other") === activeTab)
                 .map(def => {
-                  const key = `${def.word_id || word.id}:${def.sense_index}`;
+                  const key = `${def.word_id || word.id}:${def.sense_id}`;
                   const isSelected = selectedDefs.has(key);
                   return (
                     <div 

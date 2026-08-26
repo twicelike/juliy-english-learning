@@ -149,7 +149,7 @@ func (s *service) SubmitMission(ctx context.Context, userIDStr string, missionID
 		progress.BestScore = float64(evalResp.Score)
 	}
 	progress.LastScore = float64(evalResp.Score)
-	
+
 	totalAttempts := float64(progress.Attempts)
 	progress.AverageScore = ((progress.AverageScore * totalAttempts) + float64(evalResp.Score)) / (totalAttempts + 1)
 	progress.Completed = true
@@ -184,18 +184,18 @@ func (s *service) SubmitMission(ctx context.Context, userIDStr string, missionID
 
 	if s.evalSvc != nil {
 		ev := &evaluation.Evidence{
-			UserID:     userID,
-			EventID:    submission.ID.Hex(),
-			Skill:      "writing", // From profile.SkillWriting
-			Score:      float64(evalResp.Score),
-			Weight:     evaluation.WeightWriting,
-			Source:     evaluation.SourceWritingLab,
-			Metadata:   bson.M{"mission_id": missionID.Hex(), "attempt_id": submission.ID.Hex()},
+			UserID:   userID,
+			EventID:  submission.ID.Hex(),
+			Skill:    "writing", // From profile.SkillWriting
+			Score:    float64(evalResp.Score),
+			Weight:   evaluation.WeightWriting,
+			Source:   evaluation.SourceWritingLab,
+			Metadata: bson.M{"mission_id": missionID.Hex(), "attempt_id": submission.ID.Hex()},
 		}
 		go func(e *evaluation.Evidence) {
 			bgCtx := context.Background()
 			_ = s.evalSvc.RecordEvidence(bgCtx, e)
-			
+
 			// Publish profile refresh event
 			if s.publisher != nil {
 				_ = s.publisher.Publish(bgCtx, events.Event{

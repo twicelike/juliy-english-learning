@@ -27,9 +27,9 @@ func Connect(uri string) (*mongo.Client, error) {
 			} else if duration > 300*time.Millisecond {
 				logger = log.Error()
 			}
-			
+
 			logEvent := logger.Str("command", commandName).Dur("duration", duration)
-			
+
 			if cmd, ok := activeCommands.LoadAndDelete(requestID); ok {
 				logEvent = logEvent.Str("query", cmd.(*event.CommandStartedEvent).Command.String())
 			}

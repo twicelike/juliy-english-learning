@@ -34,13 +34,13 @@ export interface FillBlankAIRequest {
 
 export interface ExplainSenseRequest {
   wordId: string;
-  senseIndex: number;
+  senseId: string;
   userLevel?: string;
   nativeLanguage?: string;
 }
 
 export interface BatchSenseExplanation {
-  senseIndex: number;
+  senseId: string;
   explanation: string;
   examples: string[];
   commonMistakes: string[];

@@ -41,8 +41,6 @@ type wordRequest struct {
 	NativeLanguage string `json:"nativeLanguage"`
 }
 
-
-
 type compareRequest struct {
 	Word1          string `json:"word1" binding:"required"`
 	Word2          string `json:"word2" binding:"required"`
@@ -166,7 +164,6 @@ func (h *Handler) GenerateExamples(c *gin.Context) {
 	}
 	domain.OK(c, resp)
 }
-
 
 // -----------------------------------------------------------------------
 // Writing handlers

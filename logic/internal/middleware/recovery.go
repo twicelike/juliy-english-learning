@@ -17,7 +17,7 @@ func Recovery() gin.HandlerFunc {
 			if r := recover(); r != nil {
 				reqID := c.GetHeader("X-Request-ID")
 				stack := string(debug.Stack())
-				
+
 				log.Error().
 					Str("req_id", reqID).
 					Str("panic", fmt.Sprintf("%v", r)).

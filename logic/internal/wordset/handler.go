@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/english/backend/internal/language"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"github.com/english/backend/internal/language"
 )
 
 type Handler struct {
@@ -207,7 +207,7 @@ func (h *Handler) AddWord(c *gin.Context) {
 		return
 	}
 
-	err = h.svc.AddWord(c.Request.Context(), uid, setID, wordID, req.SenseIndex)
+	err = h.svc.AddWord(c.Request.Context(), uid, setID, wordID, req.SenseID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -373,7 +373,6 @@ func (h *Handler) RestoreWords(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, res)
 }
-
 
 func (h *Handler) UpdateAnnotation(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")

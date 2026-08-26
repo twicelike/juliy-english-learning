@@ -40,7 +40,7 @@ func TestEvaluateSkill(t *testing.T) {
 		{
 			name: "Recent + Retention",
 			evidences: []*Evidence{
-				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 90, Weight: 1.0}, // Recent: 90
+				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 90, Weight: 1.0},  // Recent: 90
 				{OccurredAt: now.Add(-10 * 24 * time.Hour), Score: 60, Weight: 1.0}, // Retention: 60
 			},
 			// Normalization: RecentWeight(0.60) / 0.85 = 0.70588
@@ -54,7 +54,7 @@ func TestEvaluateSkill(t *testing.T) {
 		{
 			name: "All Three Buckets",
 			evidences: []*Evidence{
-				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 80, Weight: 1.0}, // Recent: 80
+				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 80, Weight: 1.0},  // Recent: 80
 				{OccurredAt: now.Add(-10 * 24 * time.Hour), Score: 80, Weight: 1.0}, // Retention: 80
 				{OccurredAt: now.Add(-40 * 24 * time.Hour), Score: 80, Weight: 1.0}, // Hist: 80
 			},
@@ -79,7 +79,7 @@ func TestEvaluateSkill(t *testing.T) {
 		{
 			name: "Trend Declining",
 			evidences: []*Evidence{
-				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 50, Weight: 1.0}, // Recent: 50
+				{OccurredAt: now.Add(-1 * 24 * time.Hour), Score: 50, Weight: 1.0},  // Recent: 50
 				{OccurredAt: now.Add(-10 * 24 * time.Hour), Score: 60, Weight: 1.0}, // Retention: 60
 			},
 			expectedScore: 50*(0.60/0.85) + 60*(0.25/0.85),
@@ -156,7 +156,7 @@ func TestEvaluateSkill(t *testing.T) {
 				{OccurredAt: now.Add(-10 * 24 * time.Hour), Score: 60, Weight: 1.0},
 			},
 			expectedScore: 55*(0.60/0.85) + 60*(0.25/0.85),
-			expectedTrend: TrendStable, // 55 == 60 - 5
+			expectedTrend: TrendStable,    // 55 == 60 - 5
 			expectedLevel: SkillLevelWeak, // 38.82 + 17.64 = 56.47
 			expectedConf:  2.0,
 		},

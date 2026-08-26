@@ -45,7 +45,7 @@ func SelectReviewWords(
 
 	// Shuffle each category to avoid selecting the same words repeatedly
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	
+
 	shuffle := func(slice []SessionItemRef) {
 		rng.Shuffle(len(slice), func(i, j int) {
 			slice[i], slice[j] = slice[j], slice[i]

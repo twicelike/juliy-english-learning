@@ -85,19 +85,18 @@ func (r *mongoRepository) EnsureIndexes(ctx context.Context) error {
 	return nil
 }
 
-
 func (r *mongoRepository) EnqueueJob(ctx context.Context, wordID bson.ObjectID, targetLang string) error {
 	now := time.Now()
-	
+
 	filter := bson.M{
-		"word_id": wordID,
+		"word_id":         wordID,
 		"target_language": targetLang,
 	}
-	
+
 	update := bson.M{
 		"$setOnInsert": bson.M{
-			"status":          JobStatusPending,
-			"attempts":        0,
+			"status":   JobStatusPending,
+			"attempts": 0,
 			// claimable_at = zero-time means immediately claimable.
 			"claimable_at":    time.Time{},
 			"next_attempt_at": now,
@@ -105,7 +104,7 @@ func (r *mongoRepository) EnqueueJob(ctx context.Context, wordID bson.ObjectID, 
 			"updated_at":      now,
 		},
 	}
-	
+
 	opts := options.UpdateOne().SetUpsert(true)
 	_, err := r.jobsColl.UpdateOne(ctx, filter, update, opts)
 	return err
@@ -113,39 +112,16 @@ func (r *mongoRepository) EnqueueJob(ctx context.Context, wordID bson.ObjectID, 
 
 func (r *mongoRepository) ClaimJobs(ctx context.Context, limit int) ([]TranslationJob, error) {
 	now := time.Now()
+	var claimed []TranslationJob
 
 	// claimable_at <= now covers both:
 	//   - pending jobs (claimable_at = zero-time, always <= now)
 	//   - failed jobs ready for retry (claimable_at = next_attempt_at)
-	// Excludes "processing" and "completed" by filtering on status.
-	// A single index {claimable_at, status, created_at} covers this scan and sort.
 	filter := bson.M{
 		"claimable_at": bson.M{"$lte": now},
 		"status":       bson.M{"$in": []JobStatus{JobStatusPending, JobStatusFailed}},
 	}
 
-	findOpts := options.Find().SetLimit(int64(limit)).SetSort(bson.D{{Key: "claimable_at", Value: 1}})
-	cursor, err := r.jobsColl.Find(ctx, filter, findOpts)
-	if err != nil {
-		return nil, err
-	}
-	
-	var jobs []TranslationJob
-	if err = cursor.All(ctx, &jobs); err != nil {
-		return nil, err
-	}
-	
-	if len(jobs) == 0 {
-		return nil, nil
-	}
-	
-	var jobIDs []bson.ObjectID
-	for _, j := range jobs {
-		jobIDs = append(jobIDs, j.ID)
-	}
-	
-	// Mark claimed jobs as processing
-	updateFilter := bson.M{"_id": bson.M{"$in": jobIDs}}
 	update := bson.M{
 		"$set": bson.M{
 			"status":     JobStatusProcessing,
@@ -154,13 +130,25 @@ func (r *mongoRepository) ClaimJobs(ctx context.Context, limit int) ([]Translati
 		},
 		"$inc": bson.M{"attempts": 1},
 	}
-	
-	_, err = r.jobsColl.UpdateMany(ctx, updateFilter, update)
-	if err != nil {
-		return nil, err
+
+	// FindOneAndUpdate is ATOMIC. This prevents race conditions between multiple workers.
+	opts := options.FindOneAndUpdate().
+		SetSort(bson.D{{Key: "claimable_at", Value: 1}}).
+		SetReturnDocument(options.After)
+
+	for i := 0; i < limit; i++ {
+		var job TranslationJob
+		err := r.jobsColl.FindOneAndUpdate(ctx, filter, update, opts).Decode(&job)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				break // No more jobs to claim
+			}
+			return claimed, err
+		}
+		claimed = append(claimed, job)
 	}
-	
-	return jobs, nil
+
+	return claimed, nil
 }
 
 func (r *mongoRepository) UpdateJobStatus(ctx context.Context, id bson.ObjectID, status JobStatus, errStr string, nextAttemptAt time.Time) error {
@@ -185,7 +173,7 @@ func (r *mongoRepository) UpdateJobStatus(ctx context.Context, id bson.ObjectID,
 			"locked_at": "",
 		},
 	}
-	
+
 	_, err := r.jobsColl.UpdateByID(ctx, id, update)
 	return err
 }
@@ -194,33 +182,33 @@ func (r *mongoRepository) SaveManyTranslations(ctx context.Context, translations
 	if len(translations) == 0 {
 		return nil
 	}
-	
+
 	var models []mongo.WriteModel
 	for _, tr := range translations {
 		filter := bson.M{
-			"word_id": tr.WordID,
-			"sense_index": tr.SenseIndex,
+			"word_id":         tr.WordID,
+			"sense_id":        tr.SenseID,
 			"target_language": tr.TargetLanguage,
 		}
-		
+
 		update := bson.M{
 			"$set": bson.M{
 				"translations": tr.Translations,
-				"provider": tr.Provider,
-				"model": tr.Model,
-				"version": tr.Version,
-				"updated_at": tr.UpdatedAt,
+				"provider":     tr.Provider,
+				"model":        tr.Model,
+				"version":      tr.Version,
+				"updated_at":   tr.UpdatedAt,
 			},
 			"$setOnInsert": bson.M{
 				"source_language": tr.SourceLanguage,
-				"created_at": tr.CreatedAt,
+				"created_at":      tr.CreatedAt,
 			},
 		}
-		
+
 		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
 		models = append(models, model)
 	}
-	
+
 	_, err := r.coll.BulkWrite(ctx, models)
 	return err
 }
@@ -229,21 +217,21 @@ func (r *mongoRepository) GetTranslationsByWordIDs(ctx context.Context, wordIDs 
 	if len(wordIDs) == 0 {
 		return nil, nil
 	}
-	
+
 	filter := bson.M{
-		"word_id": bson.M{"$in": wordIDs},
+		"word_id":         bson.M{"$in": wordIDs},
 		"target_language": targetLang,
 	}
-	
+
 	cursor, err := r.coll.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var results []WordTranslation
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
-	
+
 	return results, nil
 }

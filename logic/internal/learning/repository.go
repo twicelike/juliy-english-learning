@@ -3,10 +3,10 @@ package learning
 import (
 	"context"
 	"errors"
-	"time"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"time"
 )
 
 type repository struct {
@@ -41,7 +41,7 @@ func (r *repository) GetProgressForWords(ctx context.Context, userID bson.Object
 	if len(items) == 0 {
 		return make(map[LearningProgressKey]*LearningProgress), nil
 	}
-	
+
 	wordIDs := make([]bson.ObjectID, len(items))
 	for i, item := range items {
 		wordIDs[i] = item.WordID
@@ -60,8 +60,8 @@ func (r *repository) GetProgressForWords(ctx context.Context, userID bson.Object
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		key := LearningProgressKey{WordID: p.WordID, SenseIndex: p.SenseIndex}
-		// Since multiple senses for same word_id might be returned, 
+		key := LearningProgressKey{WordID: p.WordID, SenseID: p.SenseID}
+		// Since multiple senses for same word_id might be returned,
 		// we store them by the exact key.
 		result[key] = &p
 	}
@@ -77,7 +77,7 @@ func (r *repository) UpsertProgressAndLog(ctx context.Context, p *LearningProgre
 
 	callback := func(sessCtx context.Context) (interface{}, error) {
 		// 1. Upsert Progress
-		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_index": p.SenseIndex}
+		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_id": p.SenseID}
 		update := bson.M{
 			"$set": bson.M{
 				"interval":         p.Interval,
@@ -106,7 +106,7 @@ func (r *repository) UpsertProgressAndLog(ctx context.Context, p *LearningProgre
 		return nil, nil
 	}
 
-	// Wait, we need mongo.WithSession to run a transaction if replica set. 
+	// Wait, we need mongo.WithSession to run a transaction if replica set.
 	// However, if the user is running a standalone mongo container, transactions might fail.
 	// But the user said: "MongoDB hỗ trợ transaction (replica set). Nếu không dùng transaction thì ít nhất update progress thành công insert review retry".
 	// Let's try transaction first.
@@ -118,7 +118,7 @@ func (r *repository) UpsertProgressAndLog(ctx context.Context, p *LearningProgre
 		}
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -145,7 +145,7 @@ func (r *repository) GetDueWordIDs(ctx context.Context, userID bson.ObjectID, li
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseIndex: p.SenseIndex})
+		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseID: p.SenseID})
 	}
 	return refs, cursor.Err()
 }
@@ -172,7 +172,7 @@ func (r *repository) GetPendingWordIDs(ctx context.Context, userID bson.ObjectID
 		if err := cursor.Decode(&p); err != nil {
 			return nil, err
 		}
-		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseIndex: p.SenseIndex})
+		refs = append(refs, SessionItemRef{WordID: p.WordID, SenseID: p.SenseID})
 	}
 	return refs, cursor.Err()
 }
@@ -238,7 +238,7 @@ func (r *repository) SubmitSessionWithTransaction(ctx context.Context, sessionID
 
 	// 2. Update all progresses
 	for _, p := range progresses {
-		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_index": p.SenseIndex}
+		filter := bson.M{"user_id": p.UserID, "word_id": p.WordID, "sense_id": p.SenseID}
 		update := bson.M{
 			"$set": bson.M{
 				"interval":         p.Interval,
@@ -249,11 +249,11 @@ func (r *repository) SubmitSessionWithTransaction(ctx context.Context, sessionID
 				"updated_at":       p.UpdatedAt,
 			},
 			"$setOnInsert": bson.M{
-				"_id":         p.ID,
-				"user_id":     p.UserID,
-				"word_id":     p.WordID,
-				"sense_index": p.SenseIndex,
-				"created_at":  p.CreatedAt,
+				"_id":        p.ID,
+				"user_id":    p.UserID,
+				"word_id":    p.WordID,
+				"sense_id":   p.SenseID,
+				"created_at": p.CreatedAt,
 			},
 		}
 		opts := options.UpdateOne().SetUpsert(true)
@@ -276,7 +276,7 @@ func (r *repository) SubmitSessionWithTransaction(ctx context.Context, sessionID
 	// 4. Mark session completed
 	filter := bson.M{"_id": sessionID}
 	update := bson.M{"$set": bson.M{
-		"status": SessionCompleted, 
+		"status":     SessionCompleted,
 		"updated_at": time.Now().UTC(),
 	}}
 	if _, err := r.sessionsColl.UpdateOne(ctx, filter, update); err != nil {
@@ -315,7 +315,7 @@ func (r *repository) GetDashboardCounts(ctx context.Context, userID bson.ObjectI
 		{{Key: "$facet", Value: bson.M{
 			"due_today": bson.A{
 				bson.M{"$match": bson.M{
-					"interval": bson.M{"$gt": 0},
+					"interval":         bson.M{"$gt": 0},
 					"next_review_date": bson.M{"$lte": now},
 				}},
 				bson.M{"$count": "count"},
@@ -392,12 +392,12 @@ func (r *repository) GetDashboardCounts(ctx context.Context, userID bson.ObjectI
 	accuracyPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"user_id": userID}}},
 		{{Key: "$group", Value: bson.M{
-			"_id": nil,
-			"total": bson.M{"$sum": 1},
+			"_id":     nil,
+			"total":   bson.M{"$sum": 1},
 			"correct": bson.M{"$sum": bson.M{"$cond": bson.A{bson.M{"$gte": bson.A{"$quality", 3}}, 1, 0}}},
 		}}},
 	}
-	
+
 	accCursor, err := r.reviewsColl.Aggregate(ctx, accuracyPipeline)
 	if err == nil {
 		defer accCursor.Close(ctx)
@@ -469,7 +469,7 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 	// 5. learning_sessions: {user_id: 1, status: 1, mode: 1}
 	// Drop old partial index if exists
 	_ = r.sessionsColl.Indexes().DropOne(ctx, "user_id_1_mode_1")
-	
+
 	// We do not use a partial index here because queries search for multiple statuses ($in: ["preparing", "active"])
 	// and a partial index on "in_progress" won't be used, causing COLLSCANs.
 	_, err = r.sessionsColl.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -484,7 +484,7 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 
 func (r *repository) DebugAdvanceTime(ctx context.Context, userID bson.ObjectID, days int) error {
 	filter := bson.M{"user_id": userID}
-	
+
 	// We want to subtract `days` from next_review_date and last_review_date.
 	// In MongoDB, we can use an aggregation pipeline in update to subtract time.
 	// Note: 1 day = 24 * 60 * 60 * 1000 milliseconds
@@ -528,13 +528,13 @@ func (r *repository) GetWordIDsForWordSet(ctx context.Context, userID bson.Objec
 	var refs []SessionItemRef
 	for cursor.Next(ctx) {
 		var item struct {
-			WordID     bson.ObjectID `bson:"word_id"`
-			SenseIndex int           `bson:"sense_index"`
+			WordID  bson.ObjectID `bson:"word_id"`
+			SenseID string        `bson:"sense_id"`
 		}
 		if err := cursor.Decode(&item); err != nil {
 			return nil, err
 		}
-		refs = append(refs, SessionItemRef{WordID: item.WordID, SenseIndex: item.SenseIndex})
+		refs = append(refs, SessionItemRef{WordID: item.WordID, SenseID: item.SenseID})
 	}
 	return refs, cursor.Err()
 }

@@ -40,7 +40,7 @@ func (e *sessionEnricher) EnrichItems(ctx context.Context, userID bson.ObjectID,
 	if e.transSvc != nil {
 		translations, _ := e.transSvc.GetTranslationsByWordIDs(ctx, wordIDs, targetLang)
 		for i := range translations {
-			key := fmt.Sprintf("%s:%d", translations[i].WordID.Hex(), translations[i].SenseIndex)
+			key := fmt.Sprintf("%s:%s", translations[i].WordID.Hex(), translations[i].SenseID)
 			translationsMap[key] = &translations[i]
 		}
 	}
@@ -58,7 +58,7 @@ func (e *sessionEnricher) EnrichItems(ctx context.Context, userID bson.ObjectID,
 			continue
 		}
 
-		transKey := fmt.Sprintf("%s:%d", wid.Hex(), items[i].SenseIndex)
+		transKey := fmt.Sprintf("%s:%s", wid.Hex(), items[i].SenseID)
 		if t, ok := translationsMap[transKey]; ok {
 			items[i].TranslationCandidates = t.Translations
 		}

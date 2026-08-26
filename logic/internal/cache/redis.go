@@ -81,12 +81,12 @@ func (s *service) GetOrSet(ctx context.Context, key string, target interface{}, 
 		go func() {
 			bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			
+
 			bytes, mErr := json.Marshal(res)
 			if mErr != nil {
 				return
 			}
-			
+
 			if setErr := s.client.Set(bgCtx, key, bytes, ttl).Err(); setErr != nil {
 				middleware.RedisErrorsTotal.Inc()
 				log.Error().Err(setErr).Str("key", key).Msg("redis set error")
@@ -100,8 +100,8 @@ func (s *service) GetOrSet(ctx context.Context, key string, target interface{}, 
 		return err
 	}
 
-	// Copy result to target (JSON marshal/unmarshal is a generic way to deep copy, though inefficient. 
-	// For high performance, target should be assigned directly if types match, but since target is a pointer to a struct, 
+	// Copy result to target (JSON marshal/unmarshal is a generic way to deep copy, though inefficient.
+	// For high performance, target should be assigned directly if types match, but since target is a pointer to a struct,
 	// JSON is the safest generic deep copy in Go without reflection gymnastics).
 	bytes, _ := json.Marshal(v)
 	return json.Unmarshal(bytes, target)

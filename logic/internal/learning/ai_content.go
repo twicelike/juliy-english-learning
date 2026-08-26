@@ -8,32 +8,32 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// AIBatchFillBlankResponse is the expected JSON schema from the AI for batch fill-blank generation
 type AIBatchFillBlankResponse struct {
 	Exercises []AIFillBlankItem `json:"exercises"`
 }
 
 type AIFillBlankItem struct {
-	WordID   string `json:"word_id"`
+	ReqID    string `json:"req_id"`
 	Word     string `json:"word"`
 	Question string `json:"question"` // Sentence with ___
 	Answer   string `json:"answer"`
 }
 
-// AIBatchMCQResponse is the expected JSON schema from the AI for batch multiple choice generation
 type AIBatchMCQResponse struct {
 	Exercises []AIMCQItem `json:"exercises"`
 }
 
 type AIMCQItem struct {
-	WordID  string   `json:"word_id"`
+	ReqID   string   `json:"req_id"`
 	Word    string   `json:"word"`
 	Choices []string `json:"choices"` // Exactly 4
 	Answer  string   `json:"answer"`  // Must exactly match one of the choices
 }
 
 type WordGenerationContext struct {
+	ReqID             string
 	WordID            bson.ObjectID
+	SenseID           string
 	Word              string
 	POS               string
 	Definition        string
@@ -53,7 +53,7 @@ func buildBatchFillBlankPrompt(words []WordGenerationContext) string {
 
 	sb.WriteString("Input words:\n")
 	for _, w := range words {
-		sb.WriteString(fmt.Sprintf("- word_id: %s\n  word: %s (%s)\n  definition: %s\n", w.WordID.Hex(), w.Word, w.POS, w.Definition))
+		sb.WriteString(fmt.Sprintf("- req_id: %s\n  word: %s (%s)\n  definition: %s\n", w.ReqID, w.Word, w.POS, w.Definition))
 		if len(w.ExistingSentences) > 0 {
 			sb.WriteString(fmt.Sprintf("  existing_sentences: [%s]\n", strings.Join(w.ExistingSentences, " | ")))
 		}
@@ -64,7 +64,7 @@ func buildBatchFillBlankPrompt(words []WordGenerationContext) string {
 {
   "exercises": [
     {
-      "word_id": "the exact word_id from the input",
+      "req_id": "the exact req_id from the input",
       "word": "the base word",
       "question": "The sentence with ___",
       "answer": "The word that fits the blank"
@@ -88,14 +88,14 @@ func buildBatchMCQPrompt(words []WordGenerationContext) string {
 
 	sb.WriteString("Input words:\n")
 	for _, w := range words {
-		sb.WriteString(fmt.Sprintf("- word_id: %s\n  word: %s (%s)\n  definition: %s\n\n", w.WordID.Hex(), w.Word, w.POS, w.Definition))
+		sb.WriteString(fmt.Sprintf("- req_id: %s\n  word: %s (%s)\n  definition: %s\n\n", w.ReqID, w.Word, w.POS, w.Definition))
 	}
 
 	sb.WriteString(`Return a JSON object strictly matching this schema:
 {
   "exercises": [
     {
-      "word_id": "the exact word_id from the input",
+      "req_id": "the exact req_id from the input",
       "word": "the base word",
       "choices": ["distractor1", "correct_answer", "distractor2", "distractor3"],
       "answer": "correct_answer"
@@ -113,7 +113,7 @@ func validateMCQItem(item AIMCQItem) error {
 	if len(item.Choices) != 4 {
 		return errors.New("must have exactly 4 choices")
 	}
-	
+
 	hasCorrect := false
 	unique := make(map[string]bool)
 	for _, c := range item.Choices {

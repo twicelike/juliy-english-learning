@@ -72,4 +72,3 @@ Return ONLY a JSON object matching:
   "examples": ["Sentence 1.", "Sentence 2.", "Sentence 3.", "Sentence 4.", "Sentence 5."]
 }`, ctx.Word, ctx.POS, ctx.UserLevel, ctx.Word)
 }
-

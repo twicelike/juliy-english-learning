@@ -29,7 +29,7 @@ func (s *service) RecordEvidences(ctx context.Context, evs []*Evidence) error {
 	if len(evs) == 0 {
 		return nil
 	}
-	
+
 	now := time.Now()
 	for _, ev := range evs {
 		if ev.CreatedAt.IsZero() {

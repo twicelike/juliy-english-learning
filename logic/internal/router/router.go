@@ -1,11 +1,11 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"bytes"
 
 	"github.com/english/backend/internal/ai"
 	aiclient "github.com/english/backend/internal/ai/client"
@@ -20,6 +20,7 @@ import (
 	"github.com/english/backend/internal/handler"
 	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/mail"
+	"github.com/english/backend/internal/match"
 	"github.com/english/backend/internal/middleware"
 	"github.com/english/backend/internal/profile"
 	"github.com/english/backend/internal/speaking"
@@ -60,6 +61,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 	{
 
 		dictRepo := dictionary.NewRepository(mongoClient.Database("dictionary"))
+		_ = dictRepo.EnsureIndexes(ctx)
 		dictService := dictionary.NewService(dictRepo)
 		dictHandler := dictionary.NewHandler(dictService)
 
@@ -88,12 +90,12 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		if rawAI != nil && errAI == nil {
 			aiClientWrapped = aiclient.WithMetrics(aiclient.WithRetry(rawAI, 2))
 			translationService = translation.NewService(aiClientWrapped, translationRepo)
-			
+
 			// Initialize and start Translation Worker
 			translationWorker := translation.NewWorker(
-				translationRepo, 
-				translationService, 
-				dictService, 
+				translationRepo,
+				translationService,
+				dictService,
 				cfg.TranslationBatchSize,
 				cfg.TranslationPollInterval,
 				cfg.TranslationWorkerConcur,
@@ -123,7 +125,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		// Auth Extractors for Rate Limiting
 		extractEmailFromJSON := func(c *gin.Context) string {
 			ip := c.ClientIP()
-			
+
 			// Try to read email from JSON body without breaking later bindings
 			var email string
 			if c.Request.Body != nil {
@@ -131,7 +133,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 				if err == nil && len(bodyBytes) > 0 {
 					// Restore the body for next handlers
 					c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-					
+
 					var payload struct {
 						Email string `json:"email"`
 					}
@@ -159,7 +161,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			authRoutes.POST("/resend-verification", middleware.KeyRateLimiter(3, extractEmailFromJSON), authHandler.ResendVerification)
 			authRoutes.POST("/forgot-password", middleware.KeyRateLimiter(3, extractEmailFromJSON), authHandler.ForgotPassword)
 			authRoutes.POST("/reset-password", authHandler.ResetPassword)
-			
+
 			authProtected := authRoutes.Group("")
 			authProtected.Use(middleware.RequireAuth(authRepo))
 			{
@@ -195,7 +197,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		if err := wordSetRepo.EnsureIndexes(ctx); err != nil {
 			panic(fmt.Errorf("ensure word set indexes: %w", err))
 		}
-		
+
 		// Learn Repo (needed for progress checking in WS6)
 		learnRepo := learning.NewRepository(mongoClient.Database(cfg.MongoDB))
 		_ = learnRepo.EnsureIndexes(ctx)
@@ -215,7 +217,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			wordSetRoutes.PATCH("/:id", wordSetHandler.Update)
 			wordSetRoutes.DELETE("/:id", wordSetHandler.Delete)
 			wordSetRoutes.POST("/:id/clone", wordSetHandler.Clone)
-			
+
 			wordSetRoutes.GET("/:id/words", wordSetHandler.GetWords)
 			wordSetRoutes.POST("/:id/words", wordSetHandler.AddWord)
 			wordSetRoutes.POST("/:id/words/bulk", wordSetHandler.BulkAddWords)
@@ -258,16 +260,14 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		}
 
 		// Learning
-		
+
 		exerciseContentRepo := learning.NewExerciseContentRepository(mongoClient.Database(cfg.MongoDB))
 		_ = exerciseContentRepo.EnsureIndexes(ctx)
-		
+
 		var exSvc learning.ExerciseContentService
 		if rawAI != nil && errAI == nil {
 			exSvc = learning.NewExerciseContentService(exerciseContentRepo, dictRepo, rawAI)
 		}
-
-
 
 		sessionEnrich := enricher.NewSessionEnricher(translationService, wordSetService)
 		learnService := learning.NewService(learnRepo, dictRepo, userRepo, learning.NewSM2Scheduler(), gamiService, exSvc, sessionEnrich, evalService, publisher)
@@ -292,7 +292,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		var writingEvaluator *writing.GeneratorService
 		if rawAI != nil && errAI == nil {
 			writingEvaluator = writing.NewGeneratorService(rawAI)
-			// Auto refill job is disabled as per user request. 
+			// Auto refill job is disabled as per user request.
 			// AI is only used for evaluating answers.
 		}
 
@@ -303,7 +303,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		writingRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			writingRoutes.GET("/dashboard", writingHandler.GetDashboardStats)
-			
+
 			missions := writingRoutes.Group("/missions")
 			{
 				missions.GET("/new", writingHandler.GetNewMission)
@@ -347,6 +347,19 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		dashRoutes.Use(middleware.RequireAuth(authRepo))
 		{
 			dashRoutes.GET("", profileHandler.GetDashboard)
+		}
+
+		// Match (MVP)
+		matchRepo := match.NewRepository(mongoClient.Database(cfg.MongoDB))
+		_ = matchRepo.EnsureIndexes(ctx)
+		matchService := match.NewService(matchRepo, dictRepo, learnRepo, userService, translationRepo)
+		matchHandler := match.NewHandler(matchService)
+
+		matchRoutes := v1.Group("/match")
+		matchRoutes.Use(middleware.RequireAuth(authRepo))
+		{
+			matchRoutes.GET("/recommendations", matchHandler.GetRecommendations)
+			matchRoutes.POST("/swipe", matchHandler.Swipe)
 		}
 	}
 

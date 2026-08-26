@@ -12,7 +12,7 @@ import (
 )
 
 type MeaningInput struct {
-	SenseIndex int
+	SenseID    string
 	Definition string
 }
 
@@ -69,7 +69,7 @@ func (s *service) TranslateWord(ctx context.Context, input TranslateWordInput) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract candidates from ai response: %w", err)
 	}
-	
+
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("ai returned empty candidates array")
 	}
@@ -98,6 +98,14 @@ Example output:
 
 func extractJSONCandidates(response string) ([]string, error) {
 	resp := strings.TrimSpace(response)
+
+	// Remove <think>...</think> block if present
+	if startThink := strings.Index(resp, "<think>"); startThink != -1 {
+		if endThink := strings.Index(resp, "</think>"); endThink != -1 {
+			resp = resp[:startThink] + resp[endThink+8:]
+			resp = strings.TrimSpace(resp)
+		}
+	}
 
 	if strings.HasPrefix(resp, "```json") {
 		resp = strings.TrimPrefix(resp, "```json")
@@ -130,7 +138,7 @@ func extractJSONCandidates(response string) ([]string, error) {
 		if trimmed == "" {
 			continue
 		}
-		
+
 		lowerTrimmed := strings.ToLower(trimmed)
 		if !seen[lowerTrimmed] {
 			seen[lowerTrimmed] = true
@@ -148,7 +156,7 @@ func (s *service) EnqueueJobs(ctx context.Context, wordIDs []string, targetLang 
 	if !IsSupportedLanguage(targetLang) {
 		return fmt.Errorf("unsupported target language: %s", targetLang)
 	}
-	
+
 	for _, idStr := range wordIDs {
 		wID, err := bson.ObjectIDFromHex(idStr)
 		if err != nil {
@@ -158,7 +166,7 @@ func (s *service) EnqueueJobs(ctx context.Context, wordIDs []string, targetLang 
 		// We'll just call EnqueueJob on repo
 		_ = s.repo.EnqueueJob(ctx, wID, targetLang)
 	}
-	
+
 	return nil
 }
 
@@ -186,31 +194,31 @@ func (s *service) TranslateBatch(ctx context.Context, input TranslateBatchInput)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract batch candidates from ai response: %w", err)
 	}
-	
+
 	var translations []WordTranslation
 	now := time.Now()
-	
-	// Match results back to input by word and sense
+
+	// Match results back to input by word ID and sense
 	for _, w := range input.Words {
-		sensesMap := batchResult[strings.ToLower(w.Word)]
+		sensesMap := batchResult[w.WordID]
 		if sensesMap == nil {
 			continue
 		}
-		
+
 		wID, err := bson.ObjectIDFromHex(w.WordID)
 		if err != nil {
 			continue
 		}
 
 		for _, m := range w.Meanings {
-			candidates := sensesMap[m.SenseIndex]
+			candidates := sensesMap[m.SenseID]
 			if len(candidates) > 0 {
 				if len(candidates) > 5 {
 					candidates = candidates[:5]
 				}
 				translations = append(translations, WordTranslation{
 					WordID:         wID,
-					SenseIndex:     m.SenseIndex,
+					SenseID:        m.SenseID,
 					SourceLanguage: "en",
 					TargetLanguage: input.TargetLanguage,
 					Translations:   candidates,
@@ -223,16 +231,16 @@ func (s *service) TranslateBatch(ctx context.Context, input TranslateBatchInput)
 			}
 		}
 	}
-	
+
 	return translations, nil
 }
 
 func (s *service) buildBatchPrompt(input TranslateBatchInput) string {
 	var wordsStr strings.Builder
 	for i, w := range input.Words {
-		wordsStr.WriteString(fmt.Sprintf("%d. Word: %s\n   POS: %s\n   Meanings:\n", i+1, w.Word, w.PartOfSpeech))
+		wordsStr.WriteString(fmt.Sprintf("%d. Word ID: %s (Word: %s)\n   POS: %s\n   Meanings:\n", i+1, w.WordID, w.Word, w.PartOfSpeech))
 		for _, m := range w.Meanings {
-			wordsStr.WriteString(fmt.Sprintf("     [Sense %d] %s\n", m.SenseIndex, m.Definition))
+			wordsStr.WriteString(fmt.Sprintf("     [Sense %s] %s\n", m.SenseID, m.Definition))
 		}
 		wordsStr.WriteString("\n")
 	}
@@ -242,16 +250,16 @@ func (s *service) buildBatchPrompt(input TranslateBatchInput) string {
 Please translate the following English words into %s based on their parts of speech and specific meanings (senses).
 Instruction:
 Generate the most useful target-language translations for EACH specific sense provided. Return unique candidates only. Return 1 to 5 concise translation candidates per sense.
-Output ONLY a strict JSON object mapping the lowercase English word to an object that maps the Sense Index (as a string) to an array of string translations. No markdown, no explanation.
+Output ONLY a strict JSON object mapping the Word ID (as a string) to an object that maps the Sense ID (as a string) to an array of string translations. No markdown, no explanation.
 
 Example output:
 {
-  "magnet": {
-    "0": ["nam châm", "đá nam châm"],
-    "1": ["sức hút", "người cuốn hút"]
+  "6a462b2d96e73b4df4752ff8": {
+    "sense_uuid_1": ["nam châm", "đá nam châm"],
+    "sense_uuid_2": ["sức hút", "người cuốn hút"]
   },
-  "bank account": {
-    "0": ["tài khoản ngân hàng"]
+  "6a462b2d96e73b4df4752ff9": {
+    "sense_uuid_3": ["tài khoản ngân hàng"]
   }
 }
 
@@ -259,8 +267,16 @@ Words to translate:
 %s`, input.TargetLanguage, input.TargetLanguage, wordsStr.String())
 }
 
-func extractJSONBatchCandidates(response string) (map[string]map[int][]string, error) {
+func extractJSONBatchCandidates(response string) (map[string]map[string][]string, error) {
 	resp := strings.TrimSpace(response)
+
+	// Remove <think>...</think> block if present
+	if startThink := strings.Index(resp, "<think>"); startThink != -1 {
+		if endThink := strings.Index(resp, "</think>"); endThink != -1 {
+			resp = resp[:startThink] + resp[endThink+8:]
+			resp = strings.TrimSpace(resp)
+		}
+	}
 
 	if strings.HasPrefix(resp, "```json") {
 		resp = strings.TrimPrefix(resp, "```json")
@@ -284,18 +300,13 @@ func extractJSONBatchCandidates(response string) (map[string]map[int][]string, e
 	if err := json.Unmarshal([]byte(resp), &rawMap); err != nil {
 		return nil, fmt.Errorf("invalid json format for batch: %v\nResp: %s", err, resp)
 	}
-	
-	result := make(map[string]map[int][]string)
+
+	result := make(map[string]map[string][]string)
 	for wordKey, sensesMap := range rawMap {
 		normalizedKey := strings.ToLower(strings.TrimSpace(wordKey))
-		senseResult := make(map[int][]string)
-		
+		senseResult := make(map[string][]string)
+
 		for senseKey, rawCandidates := range sensesMap {
-			var senseIdx int
-			if _, err := fmt.Sscanf(senseKey, "%d", &senseIdx); err != nil {
-				continue
-			}
-			
 			var candidates []string
 			seen := make(map[string]bool)
 			for _, c := range rawCandidates {
@@ -309,14 +320,13 @@ func extractJSONBatchCandidates(response string) (map[string]map[int][]string, e
 					candidates = append(candidates, trimmed)
 				}
 			}
-			senseResult[senseIdx] = candidates
+			senseResult[senseKey] = candidates
 		}
 		result[normalizedKey] = senseResult
 	}
 
 	return result, nil
 }
-
 
 func (s *service) GetTranslationsByWordIDs(ctx context.Context, wordIDs []bson.ObjectID, targetLang string) ([]WordTranslation, error) {
 	return s.repo.GetTranslationsByWordIDs(ctx, wordIDs, targetLang)

@@ -193,7 +193,7 @@ func (h *Handler) SubmitAttempt(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read audio file"})
 		return
 	}
-	
+
 	mimeType := fileHeader.Header.Get("Content-Type")
 
 	attempt, err := h.service.SubmitAttempt(c.Request.Context(), userIDStr, sessionIDStr, mimeType, durationMs, audioBytes)

@@ -103,10 +103,10 @@ func (s *service) ListBookmarks(ctx context.Context, userID string) ([]BookmarkR
 			AddedAt: w.AddedAt,
 		})
 	}
-	
+
 	if dtos == nil {
 		dtos = []BookmarkResponse{}
 	}
-	
+
 	return dtos, nil
 }

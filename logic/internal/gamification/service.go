@@ -62,7 +62,7 @@ func (s *service) TrackActivity(ctx context.Context, userID string, activity Act
 			CreatedAt: time.Now(),
 		}
 	}
-	
+
 	if activity == ActivityReview || activity == ActivityQuiz {
 		dp.ReviewsCompleted += count
 		dp.CorrectReviews += correctCount
@@ -140,7 +140,7 @@ func (s *service) checkAchievements(ctx context.Context, userID bson.ObjectID, s
 	}
 
 	// FIRST_PERFECT_WRITING
-	if dp.WritingMissionsCompleted > 0 && stats.TotalXP > 0 { // we can't cleanly check score here, so we do it in TrackWritingMission directly instead. 
+	if dp.WritingMissionsCompleted > 0 && stats.TotalXP > 0 { // we can't cleanly check score here, so we do it in TrackWritingMission directly instead.
 		// Actually, I'll move this to TrackWritingMission for cleaner logic.
 	}
 }
@@ -219,7 +219,7 @@ func (s *service) TrackWritingMission(ctx context.Context, userID string, score 
 	if score == 100 {
 		s.unlockAchievementIfMissing(ctx, oid, "FIRST_PERFECT_WRITING")
 	}
-	
+
 	// Check if user has done 10 writing missions total (approx check: we could sum daily progress or just rely on a new field, but let's assume if dp.WritingMissionsCompleted >= 10 today, or we can just query the writing progress table. For simplicity, we just grant it if they have done 10).
 	// For this Phase, we'll keep it simple: if they do 10 in a day, they get it, or we skip checking it here.
 	// We will skip WRITING_10_STREAK logic for now unless we add a specific tracker. Let's just grant it if streak >= 10.

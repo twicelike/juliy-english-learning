@@ -7,14 +7,14 @@ import (
 
 func TestSM2Scheduler(t *testing.T) {
 	s := NewSM2Scheduler()
-	
+
 	// Test Case 1: Initial state (EF=2.5, rep=0) and Quality=4 (Good)
 	p1 := &LearningProgress{
 		EaseFactor: 2.5,
 		Repetition: 0,
 		Interval:   0,
 	}
-	
+
 	next1 := s.CalculateNext(p1, QualityGood)
 	if next1.Repetition != 1 {
 		t.Errorf("expected repetition 1, got %d", next1.Repetition)
@@ -26,7 +26,7 @@ func TestSM2Scheduler(t *testing.T) {
 	if next1.EaseFactor != 2.5 {
 		t.Errorf("expected EF 2.5, got %f", next1.EaseFactor)
 	}
-	
+
 	// Test Case 2: Repetition=1 and Quality=4
 	next2 := s.CalculateNext(next1, QualityGood)
 	if next2.Repetition != 2 {
@@ -35,7 +35,7 @@ func TestSM2Scheduler(t *testing.T) {
 	if next2.Interval != 6 {
 		t.Errorf("expected interval 6, got %d", next2.Interval)
 	}
-	
+
 	// Test Case 3: Repetition=2 and Quality=4
 	next3 := s.CalculateNext(next2, QualityGood)
 	if next3.Repetition != 3 {
@@ -74,22 +74,22 @@ func TestSM2Scheduler(t *testing.T) {
 
 func TestIsDueAndLearned(t *testing.T) {
 	now := time.Now()
-	
+
 	due := &LearningProgress{NextReviewDate: now.Add(-time.Hour)}
 	if !IsDue(due) {
 		t.Errorf("expected due to be true")
 	}
-	
+
 	notDue := &LearningProgress{NextReviewDate: now.Add(time.Hour)}
 	if IsDue(notDue) {
 		t.Errorf("expected due to be false")
 	}
-	
+
 	learned := &LearningProgress{Interval: 21}
 	if !IsLearned(learned) {
 		t.Errorf("expected learned to be true")
 	}
-	
+
 	notLearned := &LearningProgress{Interval: 20}
 	if IsLearned(notLearned) {
 		t.Errorf("expected learned to be false")

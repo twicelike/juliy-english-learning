@@ -61,7 +61,7 @@ func (p *InProcessPublisher) Publish(ctx context.Context, ev Event) error {
 	if ev.CreatedAt.IsZero() {
 		ev.CreatedAt = time.Now()
 	}
-	
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -81,7 +81,7 @@ func (p *InProcessPublisher) StartWorker(ctx context.Context) {
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
-		
+
 		// Map to store pending requests for deduplication
 		// Key: UserID, Value: Event
 		pending := make(map[string]Event)
@@ -112,7 +112,7 @@ func (p *InProcessPublisher) processPending(pending map[string]Event) {
 	if len(pending) == 0 {
 		return
 	}
-	
+
 	for userID, ev := range pending {
 		// Use a detached context for the actual processing since we're in background
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -123,7 +123,7 @@ func (p *InProcessPublisher) processPending(pending map[string]Event) {
 			log.Info().Str("user", userID).Str("reason", ev.Reason).Msg("profile refresh processed successfully")
 		}
 		cancel()
-		
+
 		delete(pending, userID)
 	}
 }

@@ -167,4 +167,3 @@ type RecommendedTaskResponse struct {
 type RecommendationService interface {
 	GetRecommendedTask(ctx context.Context, userID string) (*RecommendedTaskResponse, error)
 }
-

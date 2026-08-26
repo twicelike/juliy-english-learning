@@ -4,7 +4,7 @@ import AudioButton from "@/components/dictionary/AudioButton";
 
 interface WordViewerItemDTO extends WordDTO {
   progress_state?: string;
-  sense_index?: number;
+  sense_id?: string;
   translation_candidates?: string[];
   annotation?: {
     text: string;
@@ -66,9 +66,9 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
   }
 
   // Filter definitions for specific sense if applicable
-  const targetSenseIndex = (word as any).sense_index;
+  const targetSenseId = (word as any).sense_id;
   const filteredDefs = word.definitions
-    ? word.definitions.filter((def: any) => targetSenseIndex === undefined || def.sense_index === targetSenseIndex)
+    ? word.definitions.filter((def: any) => targetSenseId === undefined || def.sense_id === targetSenseId)
     : [];
 
   return (

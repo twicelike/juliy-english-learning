@@ -200,7 +200,7 @@ func (r *repository) ReorderWordSetItems(ctx context.Context, setID bson.ObjectI
 		update := bson.M{"$set": bson.M{"position": i}}
 		models = append(models, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update))
 	}
-	
+
 	if len(models) == 0 {
 		return nil
 	}
@@ -224,7 +224,7 @@ func (r *repository) CreateWordSetItems(ctx context.Context, items []WordSetItem
 
 	opts := options.InsertMany().SetOrdered(false)
 	res, err := r.db.Collection("word_set_items").InsertMany(ctx, docs, opts)
-	
+
 	insertedCount := 0
 	if res != nil {
 		insertedCount = len(res.InsertedIDs)
@@ -259,37 +259,37 @@ func (r *repository) GetWordSetsContainingWord(ctx context.Context, userID bson.
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	
+
 	var userSets []WordSet
 	if err := cursor.All(ctx, &userSets); err != nil {
 		return nil, err
 	}
-	
+
 	if len(userSets) == 0 {
 		return []WordSetItem{}, nil
 	}
-	
+
 	var setIDs []bson.ObjectID
 	for _, s := range userSets {
 		setIDs = append(setIDs, s.ID)
 	}
-	
+
 	filter := bson.M{
-		"set_id": bson.M{"$in": setIDs},
+		"set_id":  bson.M{"$in": setIDs},
 		"word_id": bson.M{"$in": wordIDs},
 	}
-	
+
 	itemCursor, err := r.db.Collection("word_set_items").Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 	defer itemCursor.Close(ctx)
-	
+
 	var items []WordSetItem
 	if err := itemCursor.All(ctx, &items); err != nil {
 		return nil, err
 	}
-	
+
 	return items, nil
 }
 
@@ -335,7 +335,7 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 
 func (r *repository) UpdateWordSetItemAnnotation(ctx context.Context, setID, wordID bson.ObjectID, annotation *UserAnnotation) error {
 	filter := bson.M{
-		"set_id": setID,
+		"set_id":  setID,
 		"word_id": wordID,
 	}
 	var update bson.M

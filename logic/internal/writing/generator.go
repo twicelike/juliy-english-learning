@@ -38,7 +38,7 @@ func (s *GeneratorService) GenerateMissions(ctx context.Context, topic, scenario
 		if len(m.Vietnamese) == 0 || len(m.TargetVocabulary) == 0 {
 			continue // skip invalid
 		}
-		
+
 		// Set static fields
 		m.Topic = topic
 		m.Scenario = scenario
@@ -48,7 +48,7 @@ func (s *GeneratorService) GenerateMissions(ctx context.Context, topic, scenario
 
 		// Generate Hash to prevent duplicates
 		m.Hash = generateHash(m.Vietnamese)
-		
+
 		validMissions = append(validMissions, m)
 	}
 
@@ -149,7 +149,7 @@ func generateHash(vietnamese []string) string {
 		normalized = append(normalized, strings.TrimSpace(s))
 	}
 	joined := strings.Join(normalized, " ")
-	
+
 	// Create SHA256 hash
 	h := sha256.New()
 	h.Write([]byte(joined))

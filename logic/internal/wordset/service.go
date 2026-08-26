@@ -8,8 +8,8 @@ import (
 
 	"github.com/english/backend/internal/auth"
 	"github.com/english/backend/internal/dictionary"
-	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/language"
+	"github.com/english/backend/internal/learning"
 	"github.com/english/backend/internal/translation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -121,7 +121,7 @@ func (s *service) GetWordSetsByUserID(ctx context.Context, userID bson.ObjectID,
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Map from setID → saved sense refs for the queried word(s)
 	containsMap := make(map[string][]SavedSenseRef)
 	if len(containsWordIDs) > 0 {
@@ -129,8 +129,8 @@ func (s *service) GetWordSetsByUserID(ctx context.Context, userID bson.ObjectID,
 		for _, it := range items {
 			setIDStr := it.SetID.Hex()
 			containsMap[setIDStr] = append(containsMap[setIDStr], SavedSenseRef{
-				WordID:     it.WordID.Hex(),
-				SenseIndex: it.SenseIndex,
+				WordID:  it.WordID.Hex(),
+				SenseID: it.SenseID,
 			})
 		}
 	}
@@ -217,8 +217,8 @@ func (s *service) GetWordSetDetail(ctx context.Context, userID, setID bson.Objec
 	for _, it := range items {
 		itemIDs = append(itemIDs, it.WordID.Hex())
 		savedSenses = append(savedSenses, SavedSenseRef{
-			WordID:     it.WordID.Hex(),
-			SenseIndex: it.SenseIndex,
+			WordID:  it.WordID.Hex(),
+			SenseID: it.SenseID,
 		})
 	}
 
@@ -279,11 +279,11 @@ func (s *service) CloneWordSet(ctx context.Context, userID, setID bson.ObjectID)
 		var newItems []WordSetItem
 		for _, it := range items {
 			newItems = append(newItems, WordSetItem{
-				SetID:      newSet.ID,
-				WordID:     it.WordID,
-				SenseIndex: it.SenseIndex,
-				Position:   it.Position,
-				CreatedAt:  now,
+				SetID:     newSet.ID,
+				WordID:    it.WordID,
+				SenseID:   it.SenseID,
+				Position:  it.Position,
+				CreatedAt: now,
 			})
 		}
 		_, _ = s.repo.CreateWordSetItems(ctx, newItems)
@@ -308,7 +308,7 @@ func (s *service) UpdateWordSet(ctx context.Context, userID, setID bson.ObjectID
 	}
 
 	update := bson.M{"updated_at": time.Now()}
-	
+
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
 		if name == "" || len(name) > 100 {
@@ -317,7 +317,7 @@ func (s *service) UpdateWordSet(ctx context.Context, userID, setID bson.ObjectID
 		update["name"] = name
 		set.Name = name
 	}
-	
+
 	if req.Description != nil {
 		if len(*req.Description) > 500 {
 			return nil, fmt.Errorf("description cannot exceed 500 characters")
@@ -325,7 +325,7 @@ func (s *service) UpdateWordSet(ctx context.Context, userID, setID bson.ObjectID
 		update["description"] = *req.Description
 		set.Description = *req.Description
 	}
-	
+
 	if req.Visibility != nil {
 		if *req.Visibility != WordSetVisibilityPrivate && *req.Visibility != WordSetVisibilityPublic {
 			return nil, fmt.Errorf("invalid visibility")
@@ -333,7 +333,7 @@ func (s *service) UpdateWordSet(ctx context.Context, userID, setID bson.ObjectID
 		update["visibility"] = *req.Visibility
 		set.Visibility = *req.Visibility
 	}
-	
+
 	if req.Topics != nil {
 		update["topics"] = *req.Topics
 		set.Topics = *req.Topics
@@ -372,7 +372,7 @@ func (s *service) DeleteWordSet(ctx context.Context, userID, setID bson.ObjectID
 	return s.repo.DeleteWordSetWithItems(ctx, setID)
 }
 
-func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.ObjectID, senseIndex int) error {
+func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.ObjectID, senseID string) error {
 	_, err := s.checkOwnership(ctx, userID, setID)
 	if err != nil {
 		return err
@@ -385,11 +385,11 @@ func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.Object
 	pos := len(items)
 
 	item := &WordSetItem{
-		SetID:      setID,
-		WordID:     wordID,
-		SenseIndex: senseIndex,
-		Position:   pos,
-		CreatedAt:  time.Now(),
+		SetID:     setID,
+		WordID:    wordID,
+		SenseID:   senseID,
+		Position:  pos,
+		CreatedAt: time.Now(),
 	}
 
 	err = s.repo.CreateWordSetItem(ctx, item)
@@ -399,7 +399,7 @@ func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.Object
 			_ = s.transSvc.EnqueueJobs(ctx, []string{wordID.Hex()}, set.AnnotationLanguage)
 		}
 	}
-	
+
 	return err
 }
 
@@ -425,7 +425,7 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 
 	existingMap := make(map[string]bool)
 	for _, it := range existingItems {
-		key := fmt.Sprintf("%s:%d", it.WordID.Hex(), it.SenseIndex)
+		key := fmt.Sprintf("%s:%s", it.WordID.Hex(), it.SenseID)
 		existingMap[key] = true
 	}
 
@@ -438,18 +438,18 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 		if err != nil {
 			return nil, fmt.Errorf("invalid word id: %s", reqItem.WordID)
 		}
-		// Generate composite key for existingMap check (wordID + senseIndex)
-		key := fmt.Sprintf("%s:%d", reqItem.WordID, reqItem.SenseIndex)
+		// Generate composite key for existingMap check (wordID + senseID)
+		key := fmt.Sprintf("%s:%s", reqItem.WordID, reqItem.SenseID)
 		if existingMap[key] {
 			continue // skip silently
 		}
 		newWordIDs = append(newWordIDs, wID)
 		itemsToInsert = append(itemsToInsert, WordSetItem{
-			SetID:      setID,
-			WordID:     wID,
-			SenseIndex: reqItem.SenseIndex,
-			Position:   pos,
-			CreatedAt:  time.Now(),
+			SetID:     setID,
+			WordID:    wID,
+			SenseID:   reqItem.SenseID,
+			Position:  pos,
+			CreatedAt: time.Now(),
 		})
 		pos++
 		existingMap[key] = true
@@ -480,7 +480,7 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 			return nil, err
 		}
 		set.WordCount += added
-		
+
 		// Enqueue translation jobs
 		var wordIDStrs []string
 		for _, id := range uniqueWordIDs {
@@ -489,7 +489,7 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 		if len(wordIDStrs) > 0 && s.transSvc != nil {
 			_ = s.transSvc.EnqueueJobs(ctx, wordIDStrs, set.AnnotationLanguage)
 		}
-		
+
 		return &BulkAddWordsResponse{
 			Added:     added,
 			WordCount: set.WordCount,
@@ -605,11 +605,11 @@ func (s *service) RestoreWords(ctx context.Context, userID, setID bson.ObjectID,
 			continue // already in set, skip
 		}
 		toInsert = append(toInsert, WordSetItem{
-			SetID:      setID,
-			WordID:     wID,
-			SenseIndex: 0, // restore with original sense — caller must pass correct IDs
-			Position:   pos,
-			CreatedAt:  now,
+			SetID:     setID,
+			WordID:    wID,
+			SenseID:   "", // restore with original sense — caller must pass correct IDs
+			Position:  pos,
+			CreatedAt: now,
 		})
 		restoredIDs = append(restoredIDs, wID.Hex())
 		existingMap[wID] = true
@@ -687,14 +687,14 @@ func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.Object
 	var itemRefs []learning.SessionItemRef
 	for _, item := range items {
 		wordIDs = append(wordIDs, item.WordID)
-		itemRefs = append(itemRefs, learning.SessionItemRef{WordID: item.WordID, SenseIndex: item.SenseIndex})
+		itemRefs = append(itemRefs, learning.SessionItemRef{WordID: item.WordID, SenseID: item.SenseID})
 	}
 
 	dictWords, err := s.dictSvc.GetManyByIDs(ctx, wordIDs)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	progressMap, err := s.learnRepo.GetProgressForWords(ctx, userID, itemRefs)
 	if err != nil {
 		// Log error, but don't fail the entire view request
@@ -713,10 +713,10 @@ func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.Object
 	if s.transSvc != nil {
 		translations, _ = s.transSvc.GetTranslationsByWordIDs(ctx, wordIDs, access.Set.AnnotationLanguage)
 	}
-	
+
 	transMap := make(map[string]translation.WordTranslation)
 	for _, tr := range translations {
-		key := fmt.Sprintf("%s:%d", tr.WordID.Hex(), tr.SenseIndex)
+		key := fmt.Sprintf("%s:%s", tr.WordID.Hex(), tr.SenseID)
 		transMap[key] = tr
 	}
 
@@ -727,18 +727,18 @@ func (s *service) GetWordSetWords(ctx context.Context, userID, setID bson.Object
 			continue
 		}
 
-		key := learning.LearningProgressKey{WordID: item.WordID, SenseIndex: item.SenseIndex}
+		key := learning.LearningProgressKey{WordID: item.WordID, SenseID: item.SenseID}
 		state := learning.DetermineState(progressMap[key])
-		
+
 		candidates := []string{}
-		transKey := fmt.Sprintf("%s:%d", item.WordID.Hex(), item.SenseIndex)
+		transKey := fmt.Sprintf("%s:%s", item.WordID.Hex(), item.SenseID)
 		if tr, ok := transMap[transKey]; ok {
 			candidates = tr.Translations
 		}
-		
+
 		viewerItems = append(viewerItems, WordViewerItemDTO{
 			WordDTO:               *dw,
-			SenseIndex:            item.SenseIndex,
+			SenseID:               item.SenseID,
 			ProgressState:         state,
 			TranslationCandidates: candidates,
 			Annotation:            item.Annotation,
@@ -755,7 +755,7 @@ func (s *service) UpdateAnnotation(ctx context.Context, userID, setID, wordID bs
 	}
 
 	trimmedText := strings.TrimSpace(text)
-	
+
 	// If text is empty, clear annotation
 	if trimmedText == "" {
 		err := s.repo.UpdateWordSetItemAnnotation(ctx, setID, wordID, nil)
@@ -787,7 +787,7 @@ func (s *service) UpdateAnnotation(ctx context.Context, userID, setID, wordID bs
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return annotation, nil
 }
 
@@ -796,7 +796,7 @@ func (s *service) GetAnnotationsByUserAndWordIDs(ctx context.Context, userID bso
 	if err != nil {
 		return nil, err
 	}
-	
+
 	res := make(map[bson.ObjectID]*UserAnnotation)
 	for _, item := range items {
 		if item.Annotation != nil {

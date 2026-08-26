@@ -50,7 +50,7 @@ func (s *recommendationService) GetRecommendedTask(ctx context.Context, userID s
 
 	// 2. Aggregate evaluations to find weakest skill
 	var totalFluency, totalGrammar, totalVocab, totalPronunciation float64
-	
+
 	for _, a := range attempts {
 		ev := a.Evaluation
 		totalFluency += float64(ev.Fluency)
@@ -67,10 +67,10 @@ func (s *recommendationService) GetRecommendedTask(ctx context.Context, userID s
 
 	// Find the minimum
 	minScore := math.Min(math.Min(avgFluency, avgGrammar), math.Min(avgVocab, avgPronunciation))
-	
+
 	weakestSkill := "fluency"
 	focus := "daily_conversation" // default mapping
-	
+
 	if minScore == avgGrammar {
 		weakestSkill = "grammar"
 		focus = "past_tense" // simplistic mapping for MVP
