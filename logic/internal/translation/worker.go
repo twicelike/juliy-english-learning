@@ -153,10 +153,21 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 
 		var meanings []MeaningInput
 		for _, s := range dictWord.Definitions {
+			if s.Category == "Obscure" || s.Category == "Offensive" || s.Category == "IGNORE" {
+				continue
+			}
 			meanings = append(meanings, MeaningInput{
 				SenseID:    s.SenseID,
 				Definition: s.Definition,
 			})
+			if len(meanings) >= 5 {
+				break
+			}
+		}
+		
+		if len(meanings) == 0 {
+			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusCompleted, "all senses skipped (obscure/offensive)", time.Time{})
+			continue
 		}
 
 		input.Words = append(input.Words, TranslateWordInput{

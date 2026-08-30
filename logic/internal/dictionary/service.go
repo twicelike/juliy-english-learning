@@ -207,6 +207,10 @@ func mapToDTO(doc *WordDocument) WordDTO {
 				Definition:   gloss,
 				Examples:     []string{},
 			}
+			
+			if sense.Quality != nil {
+				defDTO.Category = string(sense.Quality.Category)
+			}
 			count := 0
 			for _, ex := range sense.Examples {
 				if ex.Text != "" {

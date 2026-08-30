@@ -42,9 +42,9 @@ func (s *service) GetRecommendations(ctx context.Context, userID string, limit i
 
 	// 2. Fetch candidate words (top frequent words excluding swiped ones)
 	// We fetch more than limit because some words might be completely learned or ineligible.
-	fetchLimit := limit * 3
-	if fetchLimit < 300 {
-		fetchLimit = 300
+	fetchLimit := limit * 10
+	if fetchLimit < 1000 {
+		fetchLimit = 1000
 	}
 	candidates, err := s.dictRepo.GetTopWordsNotIn(ctx, swipedIDs, fetchLimit)
 	if err != nil {

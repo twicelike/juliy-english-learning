@@ -63,7 +63,7 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 		},
 		ResponseFormat: openRouterFmt{Type: "json_object"},
 		Temperature:    0.2, // low temp for deterministic JSON
-		MaxTokens:      1000,
+		MaxTokens:      4000,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

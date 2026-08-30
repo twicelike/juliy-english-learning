@@ -89,6 +89,7 @@ type DefinitionDTO struct {
 	SenseID      string   `json:"sense_id"`    // Stable Sense ID
 	SenseIndex   int      `json:"sense_index"` // Deprecated: keep for backward compatibility
 	PartOfSpeech string   `json:"partOfSpeech,omitempty"`
+	Category     string   `json:"category,omitempty"` // Added for filtering during translation
 	Definition   string   `json:"definition"`
 	Examples     []string `json:"examples"`
 }
