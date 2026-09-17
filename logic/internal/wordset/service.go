@@ -166,7 +166,7 @@ func (s *service) ExploreWordSets(ctx context.Context, req ExploreWordSetsReques
 	for _, set := range sets {
 		creatorName := "Unknown User"
 		creator, err := s.authRepo.GetUserByID(ctx, set.UserID)
-		if err == nil && creator != nil {
+		if err == nil && creator != nil && creator.DisplayName != "" {
 			creatorName = creator.DisplayName
 		}
 
@@ -225,7 +225,7 @@ func (s *service) GetWordSetDetail(ctx context.Context, userID, setID bson.Objec
 	creatorName := ""
 	if !access.IsOwner {
 		creator, err := s.authRepo.GetUserByID(ctx, access.Set.UserID)
-		if err == nil && creator != nil {
+		if err == nil && creator != nil && creator.DisplayName != "" {
 			creatorName = creator.DisplayName
 		} else {
 			creatorName = "Unknown User"

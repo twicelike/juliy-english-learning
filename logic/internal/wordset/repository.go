@@ -319,7 +319,7 @@ func (r *repository) EnsureIndexes(ctx context.Context) error {
 	// word_set_items indexes
 	wsiIndex := []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "set_id", Value: 1}, {Key: "word_id", Value: 1}, {Key: "sense_index", Value: 1}},
+			Keys:    bson.D{{Key: "set_id", Value: 1}, {Key: "word_id", Value: 1}, {Key: "sense_id", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
 		{

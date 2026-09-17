@@ -8,11 +8,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // OpenRouterClient implements ai.AIClient using the OpenRouter API (OpenAI compatible).
 type OpenRouterClient struct {
-	apiKey     string
+	apiKeys    []string
+	keyIndex   uint32
 	model      string
 	httpClient *http.Client
 }
@@ -22,10 +25,24 @@ func NewOpenRouterClient(apiKey, model string) (*OpenRouterClient, error) {
 	if model == "" {
 		model = "google/gemini-2.5-flash"
 	}
+	
+	// Support multiple comma-separated keys for backup fallback
+	var keys []string
+	for _, k := range strings.Split(apiKey, ",") {
+		if trimmed := strings.TrimSpace(k); trimmed != "" {
+			keys = append(keys, trimmed)
+		}
+	}
+	if len(keys) == 0 {
+		keys = []string{""} // Fallback to empty string to avoid panic
+	}
+
 	return &OpenRouterClient{
-		apiKey:     apiKey,
+		apiKeys:    keys,
 		model:      model,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 45 * time.Second,
+		},
 	}, nil
 }
 
@@ -54,6 +71,11 @@ type openRouterResponse struct {
 	} `json:"choices"`
 }
 
+func (c *OpenRouterClient) getNextKey() string {
+	idx := atomic.AddUint32(&c.keyIndex, 1)
+	return c.apiKeys[(idx-1)%uint32(len(c.apiKeys))]
+}
+
 // GenerateJSON sends a prompt to OpenRouter and unmarshals the JSON response into dst.
 func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst any) error {
 	reqBody := openRouterRequest{
@@ -76,7 +98,8 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 		return fmt.Errorf("openrouter: create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	currentKey := c.getNextKey()
+	req.Header.Set("Authorization", "Bearer "+currentKey)
 	req.Header.Set("Content-Type", "application/json")
 	// Optional OpenRouter headers for analytics:
 	req.Header.Set("HTTP-Referer", "http://localhost:3000")
@@ -103,7 +126,7 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 	}
 
 	rawJSON := orResp.Choices[0].Message.Content
-	
+
 	// Clean JSON (remove <think> block and markdown formatting)
 	rawJSON = strings.TrimSpace(rawJSON)
 	if idx := strings.Index(rawJSON, "</think>"); idx != -1 {
@@ -146,13 +169,14 @@ func (c *OpenRouterClient) GenerateText(ctx context.Context, prompt string) (str
 		return "", fmt.Errorf("openrouter: marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("openrouter: create request: %w", err)
 	}
 
+	currentKey := c.getNextKey()
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Authorization", "Bearer "+currentKey)
 	req.Header.Set("HTTP-Referer", "https://github.com/english")
 	req.Header.Set("X-Title", "English Learning App")
 

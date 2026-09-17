@@ -87,6 +87,7 @@ func (s *service) Search(ctx context.Context, query string) ([]WordDTO, error) {
 }
 
 func (s *service) GetDetail(ctx context.Context, word string) (*WordDTO, error) {
+	word = strings.ToLower(strings.TrimSpace(word))
 	docs, err := s.repo.GetWords(ctx, word)
 	if err != nil {
 		return nil, err
@@ -294,6 +295,9 @@ func mapDocsToDTO(docs []WordDocument) WordDTO {
 					PartOfSpeech: doc.POS,
 					Definition:   gloss,
 					Examples:     []string{},
+				}
+				if sense.Quality != nil {
+					defDTO.Category = string(sense.Quality.Category)
 				}
 				count := 0
 				for _, ex := range sense.Examples {

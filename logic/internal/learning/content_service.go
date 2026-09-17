@@ -58,6 +58,20 @@ func (s *exerciseContentService) GetExercises(ctx context.Context, refs []Sessio
 	return pool, nil
 }
 
+// GetExercisesFromDB fetches exercises directly from the database without triggering any AI generation if exercises are missing.
+func (s *exerciseContentService) GetExercisesFromDB(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error) {
+	pool, err := s.repo.GetRandomExercises(ctx, refs, exType, limitPerWord)
+	if err != nil {
+		return nil, err
+	}
+	
+	if pool == nil {
+		pool = make(map[string][]ExerciseContent)
+	}
+	
+	return pool, nil
+}
+
 func (s *exerciseContentService) generateAndSaveMissing(ctx context.Context, missingRefs []SessionItemRef, pool map[string][]ExerciseContent, exType ExerciseType, limitPerWord int) error {
 	maxRetries := 3
 

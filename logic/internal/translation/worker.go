@@ -146,14 +146,11 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 			continue
 		}
 
-		if dictWord.FrequencyScore < 60 {
-			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusFailed, "skipped: frequency_score < 60", time.Now().Add(8760*time.Hour))
-			continue
-		}
-
 		var meanings []MeaningInput
 		for _, s := range dictWord.Definitions {
-			if s.Category == "Obscure" || s.Category == "Offensive" || s.Category == "IGNORE" {
+			c := dictionary.SenseCategory(s.Category)
+			// Cho qua nếu chưa enrich (c == "") hoặc thuộc category hợp lệ
+			if c != "" && c != dictionary.CategoryPrimary && c != dictionary.CategoryCore && c != dictionary.CategoryUseful {
 				continue
 			}
 			meanings = append(meanings, MeaningInput{
@@ -166,7 +163,7 @@ func (w *worker) processGroup(ctx context.Context, targetLang string, jobs []Tra
 		}
 		
 		if len(meanings) == 0 {
-			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusCompleted, "all senses skipped (obscure/offensive)", time.Time{})
+			w.repo.UpdateJobStatus(ctx, jobMap[wID].ID, JobStatusCompleted, "all senses ineligible (NICHE/RARE/IGNORE)", time.Time{})
 			continue
 		}
 

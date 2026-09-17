@@ -39,16 +39,21 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
   const passOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
   const keepOpacity = useTransform(x, [0, 50, 100], [0, 0.5, 1]);
 
+  const [isSwiping, setIsSwiping] = useState(false);
+
   const handleDragEnd = async (e: any, info: PanInfo) => {
+    if (isSwiping) return;
     const offset = info.offset.x;
     const velocity = info.velocity.x;
 
     if (offset > 100 || velocity > 500) {
       // Keep
+      setIsSwiping(true);
       await controls.start({ x: 300, opacity: 0, transition: { duration: 0.3 } });
       onSwipe("keep", card);
     } else if (offset < -100 || velocity < -500) {
       // Pass
+      setIsSwiping(true);
       await controls.start({ x: -300, opacity: 0, transition: { duration: 0.3 } });
       onSwipe("pass", card);
     } else {
@@ -58,6 +63,8 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
   };
 
   const handleManualSwipe = async (action: "keep" | "pass") => {
+    if (isSwiping) return;
+    setIsSwiping(true);
     if (action === "keep") {
       await controls.start({ x: 300, opacity: 0, transition: { duration: 0.3 } });
       onSwipe("keep", card);
@@ -86,9 +93,8 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
         drag={isTop ? "x" : false}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         onDragEnd={handleDragEnd}
-        style={{ x, rotate, opacity }}
-        className={`w-full max-w-md h-[460px] bg-white rounded-3xl p-6 flex flex-col relative shadow-sm border-2 border-gray-800 ${
-          isTop ? "cursor-grab active:cursor-grabbing" : ""
+        className={`w-full max-w-md min-h-[300px] h-auto shrink-0 bg-white rounded-3xl p-6 flex flex-col relative shadow-sm border-2 border-gray-800 ${
+          isTop ? "cursor-grab active:cursor-grabbing touch-none" : ""
         }`}
         // Wobbly border effect using border-radius
         style={{
@@ -101,7 +107,7 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
         {/* Pass Label */}
         <motion.div
           style={{ opacity: passOpacity }}
-          className="absolute top-8 right-8 border-4 border-red-500 text-red-500 font-bold text-3xl px-4 py-1 rounded-xl rotate-12 z-10 font-handwritten"
+          className="absolute top-8 right-8 border-4 border-red-500 text-red-500 font-bold text-3xl px-4 py-1 rounded-xl rotate-12 z-10"
         >
           PASS
         </motion.div>
@@ -109,32 +115,32 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
         {/* Keep Label */}
         <motion.div
           style={{ opacity: keepOpacity }}
-          className="absolute top-8 left-8 border-4 border-green-500 text-green-500 font-bold text-3xl px-4 py-1 rounded-xl -rotate-12 z-10 font-handwritten"
+          className="absolute top-8 left-8 border-4 border-green-500 text-green-500 font-bold text-3xl px-4 py-1 rounded-xl -rotate-12 z-10"
         >
           KEEP
         </motion.div>
 
-        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-          <h2 className="text-5xl font-bold font-handwritten text-gray-900 tracking-wide">
+        <div className="flex-1 flex flex-col items-center justify-center text-center w-full pt-4 pb-2">
+          <h2 className="text-5xl font-bold text-black tracking-wide">
             {card.word}
           </h2>
-          <span className="text-gray-500 italic text-lg font-handwritten">{card.pos}</span>
+          <span className="text-black italic text-lg mt-2">{card.pos}</span>
 
-          <div className="mt-8 space-y-4">
-            <p className="text-xl text-gray-800 font-handwritten">
+          <div className="mt-8 flex flex-col justify-center w-full space-y-4">
+            <p className="text-xl text-black">
               {card.definition}
             </p>
-            <p className="text-lg text-blue-700 font-handwritten border-t border-gray-300 border-dashed pt-4">
+            <p className="text-lg text-black border-t border-black/20 border-dashed pt-4">
               {card.translation}
             </p>
           </div>
         </div>
 
         <div className="flex justify-between items-end mt-4">
-          <div className="opacity-70">{getDoodle(card.word)}</div>
+          <div className="text-black">{getDoodle(card.word)}</div>
           
           {card.match_rate !== undefined && card.match_rate > 0 && (
-            <div className="flex items-center gap-1 text-gray-600 font-handwritten bg-gray-100 px-3 py-1 rounded-full text-sm border border-gray-300" style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}>
+            <div className="flex items-center gap-1 text-black bg-black/5 px-3 py-1 rounded-full text-sm border border-black/20" style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}>
               <Pencil className="w-3 h-3" />
               <span>{card.match_rate}% matched</span>
             </div>

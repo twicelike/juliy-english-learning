@@ -116,31 +116,46 @@ func (s *service) GetSession(ctx context.Context, userID string, mode SessionMod
 	}
 
 	wordDocByID := make(map[bson.ObjectID]*dictionary.WordDocument)
-	allWordRefs := make([]SessionItemRef, 0)
 	seenWords := make(map[string]bool)
-
+	var wordIDs []bson.ObjectID
 	for i := range wordDocs {
 		w := wordDocs[i].Word
 		if seenWords[w] {
 			continue
 		}
 		seenWords[w] = true
-
 		wordDocByID[wordDocs[i].ID] = &wordDocs[i]
-		senseID := ""
-		if len(wordDocs[i].Senses) > 0 {
-			senseID = wordDocs[i].Senses[0].ID
-		}
-		allWordRefs = append(allWordRefs, SessionItemRef{WordID: wordDocs[i].ID, SenseID: senseID})
+		wordIDs = append(wordIDs, wordDocs[i].ID)
 	}
 
-	// 3. Get existing progress for all bookmarked words
-	progressMap, err := s.repo.GetProgressForWords(ctx, uid, allWordRefs)
+	// 3. Get existing progress for all bookmarked words (all senses)
+	queryRefs := make([]SessionItemRef, len(wordIDs))
+	for i, id := range wordIDs {
+		queryRefs[i] = SessionItemRef{WordID: id} // Empty SenseID fetches all
+	}
+	progressMap, err := s.repo.GetProgressForWords(ctx, uid, queryRefs)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. Prioritise: due words first, then new words
+	// 4. Discover eligible senses and prioritize
+	var allWordRefs []SessionItemRef
+	for _, id := range wordIDs {
+		doc := wordDocByID[id]
+		wordProgresses := make(map[string]*LearningProgress)
+		for k, p := range progressMap {
+			if k.WordID == doc.ID {
+				wordProgresses[k.SenseID] = p
+			}
+		}
+
+		nextSense := DiscoverNextSense(doc, wordProgresses)
+		if nextSense == nil {
+			continue // All eligible senses are mastered
+		}
+		allWordRefs = append(allWordRefs, SessionItemRef{WordID: doc.ID, SenseID: nextSense.ID})
+	}
+
 	var dueRefs, newRefs []SessionItemRef
 	for _, ref := range allWordRefs {
 		key := LearningProgressKey{WordID: ref.WordID, SenseID: ref.SenseID}
@@ -561,7 +576,7 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 	// Fetch ONLY Fill Blank Exercises via AI
 	var fbExercises map[string][]ExerciseContent
 	if s.exSvc != nil {
-		fbExercises, _ = s.exSvc.GetExercises(ctx, session.Items, ExerciseFillBlank, 1)
+		fbExercises, _ = s.exSvc.GetExercisesFromDB(ctx, session.Items, ExerciseFillBlank, 1)
 	}
 
 	// ---------------------------------------------------------

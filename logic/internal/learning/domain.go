@@ -286,6 +286,9 @@ type SessionEnricher interface {
 type ExerciseContentService interface {
 	// GetExercises returns the requested number of exercises per word, generating them via AI if the DB pool is insufficient.
 	GetExercises(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error)
+	
+	// GetExercisesFromDB returns the requested number of exercises per word from the database pool without triggering AI generation.
+	GetExercisesFromDB(ctx context.Context, refs []SessionItemRef, exType ExerciseType, limitPerWord int) (map[string][]ExerciseContent, error)
 }
 
 type Service interface {

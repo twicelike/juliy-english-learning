@@ -422,7 +422,7 @@ export default function WordSetViewerPage() {
                 const wordOriginalIndex = words.indexOf(word);
                 return (
                   <div
-                    key={`${word.id}:${word.sense_id}`}
+                    key={`${word.id}:${word.sense_id ?? ""}:${wordOriginalIndex}`}
                     className={`group w-full flex items-center gap-2 px-2 py-2 rounded-lg transition-colors border ${
                       isSelected ? "bg-red-500/10 border-red-500/20" :
                       isActive ? "bg-indigo-500/20 border-indigo-500/30" :

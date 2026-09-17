@@ -1,6 +1,8 @@
 package learning
 
 import (
+	"strings"
+
 	"github.com/english/backend/internal/dictionary"
 )
 
@@ -20,6 +22,20 @@ func DiscoverNextSense(doc *dictionary.WordDocument, progresses map[string]*Lear
 	if doc == nil {
 		return nil
 	}
+	
+	// Quick hack to filter out letters of the alphabet and very short abbreviations
+	if len(doc.Word) < 3 {
+		safeShortWords := map[string]bool{
+			"is": true, "am": true, "be": true, "do": true, "go": true, "it": true, 
+			"he": true, "we": true, "me": true, "us": true, "as": true, "at": true, 
+			"by": true, "in": true, "of": true, "on": true, "to": true, "up": true, 
+			"no": true, "so": true, "if": true, "or": true, "an": true, "my": true,
+			"ok": true, "hi": true, "oh": true, "ah": true, "tv": true, "cd": true,
+		}
+		if !safeShortWords[doc.Word] {
+			return nil
+		}
+	}
 
 	policy := DefaultEligibilityPolicy
 
@@ -29,6 +45,14 @@ func DiscoverNextSense(doc *dictionary.WordDocument, progresses map[string]*Lear
 		// Filter out obscure or ineligible senses
 		if !policy.IsEligible(sense.Quality) {
 			continue
+		}
+
+		// Quick hack to filter out meta-linguistic dictionary definitions
+		if len(sense.Glosses) > 0 {
+			glossLower := strings.ToLower(sense.Glosses[0])
+			if strings.Contains(glossLower, "name of the latin script letter") || strings.Contains(glossLower, "abbreviation of") || strings.Contains(glossLower, "initialism of") {
+				continue
+			}
 		}
 
 		p, exists := progresses[sense.ID]

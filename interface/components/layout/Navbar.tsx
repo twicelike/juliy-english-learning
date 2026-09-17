@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useAuthStore } from "@/features/auth";
-import { useTheme } from "@/hooks/useTheme";
 
 export default function Navbar() {
   const { user } = useAuthStore();
-  const { theme, setTheme, mounted } = useTheme();
 
   return (
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-black/30 backdrop-blur-md">
@@ -23,14 +21,6 @@ export default function Navbar() {
 
         {/* CTA */}
         <div className="flex items-center gap-4">
-          {mounted && (
-            <button
-              onClick={() => setTheme(theme === 'default' ? 'sketch' : 'default')}
-              className="text-xs px-2 py-1 bg-white/10 rounded"
-            >
-              {theme === 'default' ? '🎨 Sketch' : '🌙 Dark'}
-            </button>
-          )}
           {user ? (
             <>
               <Link href="/learn" className="text-sm opacity-70 hover:opacity-100 transition-opacity">

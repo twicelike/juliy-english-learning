@@ -93,6 +93,13 @@ func (s *service) ExplainSense(ctx context.Context, wordID string, senseIndex in
 		if i == senseIndex || cachedIndices[i] || len(sense.Glosses) == 0 {
 			continue
 		}
+		// Skip ineligible senses (NICHE, RARE, IGNORE) — unknown quality is allowed
+		if sense.Quality != nil {
+			c := sense.Quality.Category
+			if c != dictionary.CategoryPrimary && c != dictionary.CategoryCore && c != dictionary.CategoryUseful {
+				continue
+			}
+		}
 		candidates = append(candidates, prompts.SensePromptData{
 			Index:      i,
 			Definition: sense.Glosses[0], // First gloss is the main definition

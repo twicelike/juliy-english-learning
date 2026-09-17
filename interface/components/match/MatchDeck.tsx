@@ -4,8 +4,14 @@ import React, { useState, useEffect } from "react";
 import MatchCard, { MatchCardData } from "./MatchCard";
 import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "@/lib/api-client";
+import { WordSetAPI } from "@/lib/wordset-api";
 
-export default function MatchDeck() {
+interface Props {
+  selectedSetIds?: string[];
+  onWordSetsUpdated?: () => void;
+}
+
+export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Props) {
   const [cards, setCards] = useState<MatchCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionKept, setSessionKept] = useState(0);
@@ -41,20 +47,46 @@ export default function MatchDeck() {
 
     if (action === "keep") {
       setSessionKept((prev) => prev + 1);
-      // Show micro-animation
-      setShowFeedback(true);
-      setTimeout(() => setShowFeedback(false), 800);
+
+      if (selectedSetIds.length === 0) {
+        // Do not record the swipe to the API and do not show save feedback.
+        // The word will reappear in future sessions.
+      } else {
+        setShowFeedback(true);
+        setTimeout(() => setShowFeedback(false), 800);
+
+        try {
+          // 1. Add to all selected word sets
+          for (const setId of selectedSetIds) {
+            try {
+              await WordSetAPI.bulkAddWords(setId, [{ word_id: card.word_id, sense_id: card.sense_id }]);
+            } catch (setErr) {
+              console.warn(`Failed to save to set ${setId}, it might be full:`, setErr);
+            }
+          }
+
+          // Trigger sidebar refresh
+          if (onWordSetsUpdated) onWordSetsUpdated();
+
+          // 2. Record swipe so it doesn't show in match again
+          await apiClient.post("/match/swipe", {
+            word_id: card.word_id,
+            action: action,
+          });
+        } catch (err) {
+          console.error("Failed to save word or record swipe", err);
+        }
+      }
     } else {
       setSessionPassed((prev) => prev + 1);
-    }
-
-    try {
-      await apiClient.post("/match/swipe", {
-        word_id: card.word_id,
-        action: action,
-      });
-    } catch (err) {
-      console.error("Failed to record swipe", err);
+      try {
+        await apiClient.post("/match/swipe", {
+          word_id: card.word_id,
+          action: action,
+        });
+      } catch (err) {
+        console.error("Failed to record swipe pass", err);
+      }
     }
 
     // Check if we need to show summary or fetch next batch
@@ -79,31 +111,31 @@ export default function MatchDeck() {
       <div className="w-full max-w-md bg-white rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm border-2 border-gray-800"
         style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}
       >
-        <h2 className="text-3xl font-bold font-handwritten mb-6">You've discovered {sessionKept + sessionPassed} words!</h2>
-        
+        <h2 className="text-3xl text-black font-bold font-handwritten mb-6">You've discovered {sessionKept + sessionPassed} words!</h2>
+
         <div className="space-y-4 mb-8 w-full">
           <div className="flex justify-between items-center text-xl font-handwritten px-4 py-2 border-2 border-green-200 bg-green-50 rounded-xl"
             style={{ borderRadius: "15px 225px 15px 255px/255px 15px 225px 15px" }}>
-            <span>♥ Kept</span>
+            <span className="text-black">Kept</span>
             <span className="font-bold text-green-600">{sessionKept}</span>
           </div>
           <div className="flex justify-between items-center text-xl font-handwritten px-4 py-2 border-2 border-gray-200 bg-gray-50 rounded-xl"
-             style={{ borderRadius: "225px 15px 255px 15px/15px 255px 15px 225px" }}>
-            <span>× Passed</span>
+            style={{ borderRadius: "225px 15px 255px 15px/15px 255px 15px 225px" }}>
+            <span className="text-black">× Passed</span>
             <span className="font-bold text-gray-600">{sessionPassed}</span>
           </div>
         </div>
 
         <div className="flex flex-col gap-4 w-full">
-          <button 
+          <button
             className="w-full py-4 bg-gray-900 text-white font-handwritten text-xl rounded-xl hover:bg-gray-800 transition-colors border-2 border-black"
             style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}
             onClick={() => window.location.href = '/learning/session'}
           >
             Learn kept words
           </button>
-          
-          <button 
+
+          <button
             className="w-full py-4 bg-transparent text-gray-900 font-handwritten text-xl rounded-xl hover:bg-gray-100 transition-colors border-2 border-gray-800"
             style={{ borderRadius: "15px 225px 15px 255px/255px 15px 225px 15px" }}
             onClick={fetchCards}
@@ -124,7 +156,7 @@ export default function MatchDeck() {
         </div>
         {totalCards > 0 && (
           <div className="w-full h-1 bg-gray-200 relative" style={{ borderRadius: "5px" }}>
-            <div 
+            <div
               className="absolute top-0 left-0 h-full bg-gray-800 transition-all duration-300"
               style={{ width: `${Math.min((currentCardIndex / totalCards) * 100, 100)}%`, borderRadius: "5px" }}
             />
@@ -132,7 +164,7 @@ export default function MatchDeck() {
         )}
       </div>
 
-      <div className="relative w-full max-w-md h-[500px] mt-8 flex justify-center perspective-[1000px]">
+      <div className="relative w-full max-w-md flex-1 min-h-[500px] mt-8 flex justify-center perspective-[1000px]">
         <AnimatePresence>
           {showFeedback && (
             <motion.div

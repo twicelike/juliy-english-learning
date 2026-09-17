@@ -2,6 +2,8 @@ package match
 
 import (
 	"context"
+	"math/rand"
+	"time"
 
 	"github.com/english/backend/internal/dictionary"
 	"github.com/english/backend/internal/learning"
@@ -77,9 +79,23 @@ func (s *service) GetRecommendations(ctx context.Context, userID string, limit i
 		}
 	}
 
+	// Shuffle candidates to add randomness within the top frequent words pool
+	// This makes the deck feel fresh and spaced out, while still limiting to top N words.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(candidates), func(i, j int) {
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	})
+
 	// 5. Resolve display sense for each candidate
 	cards := make([]MatchCardDTO, 0, limit)
+	seenSpellings := make(map[string]bool)
+
 	for _, doc := range candidates {
+		// Prevent showing the exact same spelling (e.g. noun and verb forms) in the same batch
+		if seenSpellings[doc.Word] {
+			continue
+		}
+
 		// Group progress for this word
 		wordProgresses := make(map[string]*learning.LearningProgress)
 		for key, p := range progressMap {
@@ -131,6 +147,7 @@ func (s *service) GetRecommendations(ctx context.Context, userID string, limit i
 			TotalSwipes: total,
 			MatchRate:   matchRate,
 		})
+		seenSpellings[doc.Word] = true
 
 		if len(cards) >= limit {
 			break
@@ -159,16 +176,6 @@ func (s *service) Swipe(ctx context.Context, userID string, req *SwipeRequest) e
 	err = s.repo.RecordSwipe(ctx, swipe)
 	if err != nil {
 		return err
-	}
-
-	// 2. If it's a MATCH, automatically add it to user's saved_words (bookmarks).
-	// The Learning Engine will naturally pick this up for new_words sessions.
-	if req.Action == SwipeKeep {
-		// Fetch word to get the text for bookmarking
-		doc, err := s.dictRepo.GetByID(ctx, wid)
-		if err == nil && doc != nil {
-			s.userService.AddBookmark(ctx, userID, doc.Word, "word")
-		}
 	}
 
 	return nil
