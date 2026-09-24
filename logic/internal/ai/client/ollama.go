@@ -103,6 +103,7 @@ func (o *OllamaClient) GenerateJSON(ctx context.Context, prompt string, _ any, d
 		return fmt.Errorf("ollama: empty response")
 	}
 
+	rawJSON = extractJSON(rawJSON)
 	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
 		return fmt.Errorf("ollama: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
 	}

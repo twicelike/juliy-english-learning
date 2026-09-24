@@ -7,27 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
 
-// cleanJSON removes markdown code blocks like ```json ... ``` if they exist.
-func cleanJSON(s string) string {
-	s = strings.TrimSpace(s)
 
-	// Remove <think>...</think> block if present (e.g., DeepSeek reasoning models)
-	if idx := strings.Index(s, "</think>"); idx != -1 {
-		s = s[idx+len("</think>"):]
-		s = strings.TrimSpace(s)
-	}
-
-	if strings.HasPrefix(s, "```json") {
-		s = strings.TrimPrefix(s, "```json")
-	} else if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```")
-	}
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
-}
 
 // HuggingFaceClient implements ai.AIClient using the HuggingFace Router API (OpenAI compatible).
 type HuggingFaceClient struct {
@@ -122,7 +104,7 @@ func (c *HuggingFaceClient) GenerateJSON(ctx context.Context, prompt string, _ a
 		return fmt.Errorf("huggingface: empty response, raw: %s", string(respBytes))
 	}
 
-	raw := cleanJSON(hfResp.Choices[0].Message.Content)
+	raw := extractJSON(hfResp.Choices[0].Message.Content)
 	if err := json.Unmarshal([]byte(raw), dst); err != nil {
 		return fmt.Errorf("huggingface: unmarshal response: %w (raw: %.200s)", err, raw)
 	}
@@ -178,5 +160,5 @@ func (c *HuggingFaceClient) GenerateText(ctx context.Context, prompt string) (st
 		return "", fmt.Errorf("huggingface: empty response, raw: %s", string(respBytes))
 	}
 
-	return hfResp.Choices[0].Message.Content, nil
+	return cleanResponseText(hfResp.Choices[0].Message.Content), nil
 }

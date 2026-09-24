@@ -6,10 +6,10 @@ import { useAuthStore } from "@/features/auth";
 
 interface SenseExplanationProps {
   wordId: string;
-  senseId: string;
+  senseIndex: number;
 }
 
-export default function SenseExplanation({ wordId, senseId }: SenseExplanationProps) {
+export default function SenseExplanation({ wordId, senseIndex }: SenseExplanationProps) {
   const [loading, setLoading] = useState(false);
   const [explanation, setExplanation] = useState<BatchSenseExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function SenseExplanation({ wordId, senseId }: SenseExplanationPr
     setLoading(true);
     setError(null);
     try {
-      const data = await AIAPI.explainSense({ wordId, senseId });
+      const data = await AIAPI.explainSense({ wordId, senseIndex });
       setExplanation(data);
     } catch (e: any) {
       setError(e?.message ?? "AI is unavailable right now.");
@@ -90,7 +90,7 @@ export default function SenseExplanation({ wordId, senseId }: SenseExplanationPr
 
           {explanation.commonMistakes && explanation.commonMistakes.length > 0 && (
             <div>
-              <p className="text-red-400/70 text-[10px] font-bold uppercase tracking-wider mb-1">⚠️ Common Mistakes</p>
+              <p className="text-red-400/70 text-[10px] font-bold uppercase tracking-wider mb-1">Common Mistakes</p>
               <ul className="space-y-1">
                 {explanation.commonMistakes.map((m, i) => (
                   <li key={i} className="text-white/60 text-sm flex gap-2">

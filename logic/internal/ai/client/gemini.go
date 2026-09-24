@@ -73,6 +73,8 @@ func (g *GeminiClient) parseJSONResponse(resp *genai.GenerateContentResponse, ds
 		}
 	}
 
+	raw = extractJSON(raw)
+
 	if err := json.Unmarshal([]byte(raw), dst); err != nil {
 		return fmt.Errorf("gemini: unmarshal response: %w (raw: %.200s)", err, raw)
 	}
@@ -98,5 +100,5 @@ func (g *GeminiClient) GenerateText(ctx context.Context, prompt string) (string,
 		return "", fmt.Errorf("gemini: unexpected response type")
 	}
 
-	return string(text), nil
+	return cleanResponseText(string(text)), nil
 }

@@ -102,7 +102,7 @@ func (s *service) ExplainSense(ctx context.Context, wordID string, senseIndex in
 		}
 		candidates = append(candidates, prompts.SensePromptData{
 			Index:      i,
-			Definition: sense.Glosses[0], // First gloss is the main definition
+			Definition: strings.Join(sense.Glosses, " | "), // Join all glosses for full context
 		})
 	}
 
@@ -117,7 +117,7 @@ func (s *service) ExplainSense(ctx context.Context, wordID string, senseIndex in
 	// Prepend the target sense
 	batchSenses := append([]prompts.SensePromptData{{
 		Index:      senseIndex,
-		Definition: targetSense.Glosses[0],
+		Definition: strings.Join(targetSense.Glosses, " | "),
 	}}, candidates...)
 
 	var requestedIndices []int

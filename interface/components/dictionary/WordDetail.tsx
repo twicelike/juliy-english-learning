@@ -180,7 +180,7 @@ export default function WordDetail({ word }: WordDetailProps) {
                       )}
 
                       <div className="ml-6 mt-2">
-                        <SenseExplanation wordId={word.id} senseId={def.sense_id} />
+                        <SenseExplanation wordId={def.word_id || word.id} senseIndex={def.sense_index ?? 0} />
                       </div>
                     </div>
                   ))}

@@ -126,20 +126,7 @@ func (c *OpenRouterClient) GenerateJSON(ctx context.Context, prompt string, _ an
 	}
 
 	rawJSON := orResp.Choices[0].Message.Content
-
-	// Clean JSON (remove <think> block and markdown formatting)
-	rawJSON = strings.TrimSpace(rawJSON)
-	if idx := strings.Index(rawJSON, "</think>"); idx != -1 {
-		rawJSON = rawJSON[idx+len("</think>"):]
-		rawJSON = strings.TrimSpace(rawJSON)
-	}
-	if strings.HasPrefix(rawJSON, "```json") {
-		rawJSON = strings.TrimPrefix(rawJSON, "```json")
-	} else if strings.HasPrefix(rawJSON, "```") {
-		rawJSON = strings.TrimPrefix(rawJSON, "```")
-	}
-	rawJSON = strings.TrimSuffix(rawJSON, "```")
-	rawJSON = strings.TrimSpace(rawJSON)
+	rawJSON = extractJSON(rawJSON)
 
 	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
 		return fmt.Errorf("openrouter: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
@@ -200,5 +187,5 @@ func (c *OpenRouterClient) GenerateText(ctx context.Context, prompt string) (str
 		return "", fmt.Errorf("openrouter: empty response")
 	}
 
-	return orResp.Choices[0].Message.Content, nil
+	return cleanResponseText(orResp.Choices[0].Message.Content), nil
 }

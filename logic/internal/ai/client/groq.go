@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"strings"
 )
 
 // GroqClient implements ai.AIClient using the Groq API (OpenAI compatible).
@@ -50,52 +49,6 @@ type groqResponse struct {
 	} `json:"choices"`
 }
 
-// extractJSONObject extracts the first complete JSON object from a raw text
-// response. It uses brace-depth counting while correctly skipping string
-// literals (including escaped characters), so backticks, braces inside strings,
-// or trailing notes appended by the model cannot confuse it.
-func extractJSONObject(raw string) string {
-	start := strings.Index(raw, "{")
-	if start == -1 {
-		return raw // no object found; let Unmarshal report the error
-	}
-
-	depth := 0
-	inString := false
-	escaped := false
-
-	for i := start; i < len(raw); i++ {
-		c := raw[i]
-
-		if escaped {
-			escaped = false
-			continue
-		}
-		if c == '\\' && inString {
-			escaped = true
-			continue
-		}
-		if c == '"' {
-			inString = !inString
-			continue
-		}
-		if inString {
-			continue
-		}
-
-		switch c {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				return raw[start : i+1]
-			}
-		}
-	}
-
-	return raw // incomplete object; let Unmarshal report the error
-}
 
 // GenerateJSON sends a prompt to Groq and unmarshals the JSON response into dst.
 // We intentionally omit response_format:json_object because not all Groq-hosted
@@ -146,7 +99,7 @@ func (g *GroqClient) GenerateJSON(ctx context.Context, prompt string, _ any, dst
 		return fmt.Errorf("groq: empty response")
 	}
 
-	rawJSON := extractJSONObject(gResp.Choices[0].Message.Content)
+	rawJSON := extractJSON(gResp.Choices[0].Message.Content)
 	if err := json.Unmarshal([]byte(rawJSON), dst); err != nil {
 		return fmt.Errorf("groq: unmarshal json content: %w (raw: %.200s)", err, rawJSON)
 	}
@@ -262,6 +215,6 @@ func (g *GroqClient) GenerateText(ctx context.Context, prompt string) (string, e
 		return "", fmt.Errorf("groq: empty response")
 	}
 
-	rawJSON := gResp.Choices[0].Message.Content
+	rawJSON := cleanResponseText(gResp.Choices[0].Message.Content)
 	return rawJSON, nil
 }
