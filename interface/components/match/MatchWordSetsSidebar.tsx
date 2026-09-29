@@ -55,7 +55,7 @@ export default function MatchWordSetsSidebar({ selectedSetIds, onToggleSet, refr
         ) : (
           sets.map(set => {
             const isSelected = selectedSetIds.includes(set.id);
-            const isFull = set.word_count >= 50;
+            const isFull = set.word_count >= 100;
 
             return (
               <button
@@ -82,7 +82,7 @@ export default function MatchWordSetsSidebar({ selectedSetIds, onToggleSet, refr
                     {set.name}
                   </div>
                   <div className={`text-xs ${isFull ? "text-red-400 font-bold" : "text-gray-500"}`}>
-                    {set.word_count}/50 words {isFull && "(Full)"}
+                    {set.word_count}/100 words {isFull && "(Full)"}
                   </div>
                 </div>
               </button>

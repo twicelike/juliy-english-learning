@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${decoded} - Juliy Dictionary`,
     description: `Meaning, pronunciation, and examples for the word ${decoded}.`,
     alternates: {
-      canonical: `https://juliy.com/dictionary/${encodeURIComponent(word)}`,
+      canonical: `https://juliyenglish.id.vn/dictionary/${encodeURIComponent(word)}`,
     }
   };
 }
@@ -53,7 +53,7 @@ export default async function WordPage({ params }: PageProps) {
     "@type": "DefinedTerm",
     "name": data.word,
     "description": data.definitions?.[0]?.definition || `Definition of ${data.word}`,
-    "inDefinedTermSet": "https://juliy.com/dictionary",
+    "inDefinedTermSet": "https://juliyenglish.id.vn/dictionary",
   };
 
   return (

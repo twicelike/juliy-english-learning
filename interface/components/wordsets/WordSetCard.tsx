@@ -22,8 +22,8 @@ export function WordSetCard({ set, onEdit, onDelete, formatRelativeTime, mode = 
     setMounted(true);
   }, []);
 
-  // Visual fill bar (word_count as relative fill, 50 is a visual reference only)
-  const barFill = Math.min(Math.round((set.word_count / 50) * 100), 100);
+  // Visual fill bar (word_count as relative fill, 100 is a visual reference only)
+  const barFill = Math.min(Math.round((set.word_count / 100) * 100), 100);
 
   return (
     <div className="card group relative flex flex-col rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-white/[0.07] transition-all duration-200 shadow-sm overflow-hidden">

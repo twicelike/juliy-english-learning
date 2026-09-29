@@ -382,6 +382,12 @@ func (s *service) AddWord(ctx context.Context, userID, setID, wordID bson.Object
 	if err != nil {
 		return err
 	}
+
+	limit := 100
+	if len(items) >= limit {
+		return fmt.Errorf("word set can contain at most %d words", limit)
+	}
+
 	pos := len(items)
 
 	item := &WordSetItem{
@@ -413,7 +419,7 @@ func (s *service) BulkAddWords(ctx context.Context, userID, setID bson.ObjectID,
 		return nil, fmt.Errorf("items cannot be empty")
 	}
 
-	limit := 50
+	limit := 100
 	if set.WordCount+len(req.Items) > limit {
 		return nil, fmt.Errorf("Word set can contain at most %d words. Current: %d, Request: %d", limit, set.WordCount, len(req.Items))
 	}

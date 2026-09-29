@@ -81,11 +81,13 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
 
   return (
     <motion.div
-      className="absolute w-full h-full flex flex-col justify-center items-center"
+      className="absolute w-full h-full flex flex-col justify-center items-center transition-all duration-300"
       style={{
         zIndex,
         y: yOffset,
         scale,
+        opacity: isTop ? 1 : Math.max(1 - index * 0.25, 0.3),
+        filter: isTop ? "none" : `blur(${index * 2}px)`,
       }}
       animate={controls}
     >

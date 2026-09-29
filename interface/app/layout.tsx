@@ -9,9 +9,22 @@ import Footer from "@/components/layout/Footer";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://juliyenglish.id.vn"),
   title: "Juliy — English Learning",
   description:
     "Learn English smarter with modern vocabulary tools, spaced repetition, and personalized practice.",
+  openGraph: {
+    title: "Juliy — English Learning",
+    description: "Learn English smarter with modern vocabulary tools, spaced repetition, and personalized practice.",
+    url: "https://juliyenglish.id.vn",
+    siteName: "Juliy",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Juliy — English Learning",
+    description: "Learn English smarter with modern vocabulary tools, spaced repetition, and personalized practice.",
+  },
 };
 
 import { AuthProvider } from "@/features/auth";

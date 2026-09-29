@@ -85,9 +85,9 @@ func (r *repository) ExploreWordSets(ctx context.Context, req ExploreWordSetsReq
 		return nil, 0, fmt.Errorf("wordset.ExploreWordSets count: %w", err)
 	}
 
-	sortDoc := bson.D{{Key: "clone_count", Value: -1}}
+	sortDoc := bson.D{{Key: "clone_count", Value: -1}, {Key: "_id", Value: -1}}
 	if req.Sort == "newest" {
-		sortDoc = bson.D{{Key: "created_at", Value: -1}}
+		sortDoc = bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}
 	}
 
 	page := req.Page

@@ -22,9 +22,6 @@ export function SessionProgress({ currentIndex, totalItems, onSuspend, phase }: 
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "mcq" ? "bg-stone-800 text-white" : "bg-white/10 text-white/40"}`}>
             2. Quiz
           </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phase === "fill_blank" ? "bg-stone-800 text-white" : "bg-white/10 text-white/40"}`}>
-            3. Context
-          </span>
         </div>
         
         {/* Suspend Button */}

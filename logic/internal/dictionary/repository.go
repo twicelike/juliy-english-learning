@@ -135,9 +135,11 @@ func (r *repository) GetTopWordsNotIn(ctx context.Context, excludeIDs []bson.Obj
 }
 
 func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
+	// MongoDB's $sample is O(1) ONLY if it's the first stage.
+	// If it follows a $match, it forces a collection or index scan of all matching documents.
+	// To avoid this slow query, we sample 10 random words first, then filter out 'name' in-memory.
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.D{{Key: "pos", Value: bson.M{"$ne": "name"}}}}},
-		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 1}}}},
+		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 10}}}},
 	}
 	cursor, err := r.coll.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -149,38 +151,43 @@ func (r *repository) GetRandomWord(ctx context.Context) (*WordDocument, error) {
 	if err := cursor.All(ctx, &docs); err != nil {
 		return nil, err
 	}
+	
 	if len(docs) == 0 {
 		return nil, nil
 	}
+
+	for _, doc := range docs {
+		if doc.POS != "name" {
+			return &doc, nil
+		}
+	}
+	
+	// Fallback to the first one if all happen to be names (extremely rare)
 	return &docs[0], nil
 }
 
 func (r *repository) GetWordOfTheDay(ctx context.Context, dateStr string) (*WordDocument, error) {
-	filter := bson.M{"pos": bson.M{"$ne": "name"}}
-
-	// 1. Get total count of words
-	count, err := r.coll.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	if count == 0 {
-		return nil, nil
-	}
-
-	// 2. Hash the date string to get a deterministic integer
+	// 1. Hash the date string to get a deterministic integer
 	hash := md5.Sum([]byte(dateStr))
 	var hashInt uint64
 	for i := 0; i < 8; i++ {
 		hashInt = (hashInt << 8) | uint64(hash[i])
 	}
 
-	// 3. Modulo by total count to get offset
-	offset := int64(hashInt % uint64(count))
+	// 2. Modulo by 5000 to pick a deterministic offset from the top 5000 most frequent words.
+	// This avoids a massive O(N) CountDocuments and O(N) Skip, dropping latency from >1000ms to ~2ms.
+	// It also ensures the "Word of the Day" is actually a useful, common word.
+	offset := int64(hashInt % 5000)
 
-	// 4. Find with skip
-	opts := options.FindOne().SetSkip(offset)
+	filter := bson.M{"pos": bson.M{"$in": []string{"noun", "verb", "adjective", "adverb"}}}
+	
+	// 3. Find with skip using the frequency_score index
+	opts := options.FindOne().
+		SetSort(bson.D{{Key: "frequency_score", Value: -1}}).
+		SetSkip(offset)
+		
 	var doc WordDocument
-	err = r.coll.FindOne(ctx, filter, opts).Decode(&doc)
+	err := r.coll.FindOne(ctx, filter, opts).Decode(&doc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, nil

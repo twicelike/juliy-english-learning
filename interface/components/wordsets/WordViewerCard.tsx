@@ -20,9 +20,10 @@ interface Props {
   hasNext: boolean;
   hasPrev: boolean;
   isActive: boolean;
+  forceReveal?: boolean;
 }
 
-export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActive }: Props) {
+export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActive, forceReveal }: Props) {
   const [isRevealed, setIsRevealed] = useState(false);
 
   // Reset reveal state when word changes
@@ -77,13 +78,13 @@ export function WordViewerCard({ word, onNext, onPrev, hasNext, hasPrev, isActiv
       {/* ─── Flashcard Area (3D Flip) ───────────────────────────────────── */}
       <div 
         className="flex-1 w-full h-full cursor-pointer relative"
-        onClick={() => setIsRevealed(prev => !prev)}
+        onClick={() => !forceReveal && setIsRevealed(prev => !prev)}
       >
         <div
           className="relative w-full h-full transition-transform duration-600 shadow-2xl rounded-3xl"
           style={{
             transformStyle: "preserve-3d",
-            transform: isRevealed ? "rotateY(180deg)" : "rotateY(0deg)",
+            transform: (isRevealed || forceReveal) ? "rotateY(180deg)" : "rotateY(0deg)",
           }}
         >
           {/* FRONT */}

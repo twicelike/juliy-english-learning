@@ -23,12 +23,7 @@ export default function Navbar() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              <Link href="/learn" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
-                Study
-              </Link>
-              <Link href="/speaking" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
-                Speaking
-              </Link>
+
               <Link href="/word-sets/explore" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 Explore
               </Link>

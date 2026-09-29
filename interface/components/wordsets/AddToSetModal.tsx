@@ -97,8 +97,8 @@ export function AddToSetModal({ word, onClose }: Props) {
           alert("Please select at least one meaning to save.");
           return;
         }
-        if (set.word_count + selectedDefs.size > 50) {
-          alert(`This word set can contain up to 50 words. You are trying to add ${selectedDefs.size} meaning(s), but only ${50 - set.word_count} slot(s) are available.`);
+        if (set.word_count + selectedDefs.size > 100) {
+          alert(`This word set can contain up to 100 words. You are trying to add ${selectedDefs.size} meaning(s), but only ${100 - set.word_count} slot(s) are available.`);
           return;
         }
         
@@ -226,7 +226,7 @@ export function AddToSetModal({ word, onClose }: Props) {
                   />
                   <div>
                     <div className="text-white font-medium">{set.name}</div>
-                    <div className="text-white/40 text-xs mt-0.5">{set.word_count} / 50 words</div>
+                    <div className="text-white/40 text-xs mt-0.5">{set.word_count} / 100 words</div>
                   </div>
                   <div onClick={(e) => e.stopPropagation()}>
                     <button

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/english/backend/internal/dictionary"
@@ -307,14 +309,14 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 	sessionRefs := append(pendingIDs, newAvailableRefs...)
 
 	now := time.Now()
-	// 5. Create session in "preparing" state. Do NOT create progress yet.
+	// 5. Create session in "active" state immediately since we no longer use AI async gen
 	session := &LearningSession{
 		ID:           bson.NewObjectID(),
 		UserID:       uid,
 		Mode:         "new_words",
 		Items:        sessionRefs,
 		CurrentIndex: 0,
-		Status:       SessionPreparing,
+		Status:       SessionActive,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -330,17 +332,7 @@ func (s *service) CreateNewWordsSession(ctx context.Context, userID string) (*Se
 		return nil, err
 	}
 
-	// 6. Async trigger AI content preparation
-	go func(sid bson.ObjectID, refs []SessionItemRef) {
-		bgCtx := context.Background()
-		if s.exSvc != nil {
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
-		}
-		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
-	}(session.ID, sessionRefs)
-
-	// 7. Build and return DTO (will show status "preparing")
+	// 7. Build and return DTO (will show status "active")
 	return s.buildSessionDTO(ctx, session)
 }
 
@@ -370,14 +362,14 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 	}
 
 	now := time.Now()
-	// 3. Create session in "preparing" state
+	// 3. Create session in "active" state
 	session := &LearningSession{
 		ID:           bson.NewObjectID(),
 		UserID:       uid,
 		Mode:         "review",
 		Items:        dueIDs,
 		CurrentIndex: 0,
-		Status:       SessionPreparing,
+		Status:       SessionActive,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -392,16 +384,6 @@ func (s *service) CreateReviewSession(ctx context.Context, userID string) (*Sess
 		}
 		return nil, err
 	}
-
-	// 4. Asynchronously trigger content preparation
-	go func(sid bson.ObjectID, refs []SessionItemRef) {
-		bgCtx := context.Background()
-		if s.exSvc != nil {
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
-		}
-		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
-	}(session.ID, dueIDs)
 
 	// 5. Build and return DTO
 	return s.buildSessionDTO(ctx, session)
@@ -496,7 +478,7 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	// 6. Create session
+	// 6. Create session in active state
 	session := &LearningSession{
 		ID:           bson.NewObjectID(),
 		UserID:       uid,
@@ -507,7 +489,7 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 		WordCount:    wordCount,
 		Items:        selectedIDs,
 		CurrentIndex: 0,
-		Status:       SessionPreparing,
+		Status:       SessionActive,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -523,16 +505,6 @@ func (s *service) CreateWordSetReviewSession(ctx context.Context, userID string,
 		}
 		return nil, err
 	}
-
-	// 7. Async trigger AI content preparation (Wait, we should get unique WordIDs for exercise gen, but for now we pass WordIDs)
-	go func(sid bson.ObjectID, refs []SessionItemRef) {
-		bgCtx := context.Background()
-		if s.exSvc != nil {
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseMultipleChoice, 1)
-			_, _ = s.exSvc.GetExercises(bgCtx, refs, ExerciseFillBlank, 1)
-		}
-		_ = s.repo.UpdateSessionStatus(bgCtx, sid, SessionActive)
-	}(session.ID, selectedIDs)
 
 	// 8. Build DTO
 	return s.buildSessionDTO(ctx, session)
@@ -624,6 +596,15 @@ func (s *service) buildSessionDTO(ctx context.Context, session *LearningSession)
 			ex := fbExercises[exKey][0]
 			item.FillBlankQuestion = ex.Question
 			item.FillBlankAnswer = ex.Answer
+		} else if item.Example != "" && len(item.Example) > 3 {
+			re := regexp.MustCompile("(?i)\\b" + regexp.QuoteMeta(doc.Word) + "(?:s|es|ed|d|ing|ly)?\\b")
+			if re.MatchString(item.Example) {
+				item.FillBlankQuestion = re.ReplaceAllString(item.Example, "_______")
+				item.FillBlankAnswer = doc.Word
+			} else {
+				item.FillBlankQuestion = strings.ReplaceAll(strings.ToLower(item.Example), strings.ToLower(doc.Word), "_______")
+				item.FillBlankAnswer = doc.Word
+			}
 		}
 
 		items = append(items, item)

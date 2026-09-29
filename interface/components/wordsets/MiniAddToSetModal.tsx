@@ -48,8 +48,8 @@ export function MiniAddToSetModal({ wordId, senseId, onClose }: Props) {
         return;
       }
       
-      if (set.word_count >= 50) {
-        alert("This word set is full (maximum 50 words).");
+      if (set.word_count >= 100) {
+        alert("This word set is full (maximum 100 words).");
         setAddingTo(null);
         return;
       }
@@ -126,7 +126,7 @@ export function MiniAddToSetModal({ wordId, senseId, onClose }: Props) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-gray-900 truncate">{set.name}</div>
-                      <div className="text-xs text-gray-500">{set.word_count}/50 words</div>
+                      <div className="text-xs text-gray-500">{set.word_count}/100 words</div>
                     </div>
                     
                     <div>

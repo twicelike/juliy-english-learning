@@ -53,10 +53,7 @@ export default function LearnDashboard() {
       .then((dash) => {
         setData(dash);
 
-        // Redirect new users to placement test
-        if (!dash.profile.completed_placement) {
-          router.push("/placement");
-        }
+
       })
       .catch(() => router.push("/login"))
       .finally(() => setLoading(false));

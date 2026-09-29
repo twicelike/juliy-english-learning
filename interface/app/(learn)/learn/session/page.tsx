@@ -231,9 +231,7 @@ function SessionRunner() {
   const handleMcqNext = () => {
     setSelectedChoice(null);
     if (currentIndex + 1 >= items.length) {
-      setCurrentIndex(0);
-      setPhase("fill_blank");
-      setSession(prev => prev ? { ...prev, items: [...prev.items].sort(() => Math.random() - 0.5) } : prev);
+      setPhase("submitting");
     } else {
       setCurrentIndex(i => i + 1);
     }
@@ -281,7 +279,7 @@ function SessionRunner() {
       if (nextIndex >= newItems.length) {
         nextIndex = 0;
         if (phase === "flashcard") setPhase("mcq");
-        else if (phase === "mcq") setPhase("fill_blank");
+        else if (phase === "mcq") setPhase("submitting");
         else if (phase === "fill_blank") setPhase("submitting");
       }
       
@@ -373,72 +371,7 @@ function SessionRunner() {
         </div>
       )}
 
-      {/* PHASE 3: FILL IN THE BLANK */}
-      {phase === "fill_blank" && (
-        <div className="w-full max-w-lg flex flex-col items-center">
-          <div className="w-full rounded-3xl bg-white/5 border border-white/10 p-8 mb-6">
-            <p className="text-sm text-white/40 mb-6 text-center">Fill in the blank with the correct word.</p>
-            
-            {!card.fill_blank_question ? (
-              <div className="text-center p-6">
-                <p className="text-white/50 mb-4">No sentence available for this word.</p>
-                <button onClick={handleFbNext} className="px-6 py-2 rounded-xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors">
-                  Skip →
-                </button>
-              </div>
-            ) : (
-              <div className="text-lg text-white/90 leading-relaxed text-center space-x-2">
-                {card.fill_blank_question.split("___").map((part, i, arr) => (
-                  <span key={i}>
-                    {part}
-                    {i < arr.length - 1 && (
-                      <input
-                        type="text"
-                        value={fbInput}
-                        onChange={(e) => setFbInput(e.target.value)}
-                        disabled={fbSubmitted}
-                        className={`inline-block w-32 px-3 py-1 mx-2 text-center bg-transparent border-b-2 outline-none transition-colors ${
-                          !fbSubmitted ? "border-indigo-500 text-indigo-300" :
-                          fbInput.trim().toLowerCase() === (card.fill_blank_answer || "").toLowerCase() ? "border-emerald-500 text-emerald-400" : "border-red-500 text-red-400"
-                        }`}
-                        placeholder="..."
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && fbInput.trim()) {
-                            fbSubmitted ? handleFbNext() : handleFbSubmit();
-                          }
-                        }}
-                      />
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
 
-            {fbSubmitted && fbInput.trim().toLowerCase() !== card.fill_blank_answer.toLowerCase() && (
-              <div className="mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
-                <p className="text-sm text-red-400/80 mb-1">Incorrect. The correct answer was:</p>
-                <p className="text-lg font-bold text-white">{card.fill_blank_answer}</p>
-              </div>
-            )}
-            {fbSubmitted && fbInput.trim().toLowerCase() === card.fill_blank_answer.toLowerCase() && (
-              <div className="mt-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                <p className="text-emerald-400 font-bold">Excellent!</p>
-              </div>
-            )}
-          </div>
-
-          {card.fill_blank_question && (
-            <button 
-              onClick={fbSubmitted ? handleFbNext : handleFbSubmit} 
-              disabled={!fbInput.trim()}
-              className="mt-4 px-8 py-3 rounded-2xl bg-stone-800 text-white font-medium hover:bg-stone-900 transition-colors disabled:opacity-50"
-            >
-              {fbSubmitted ? (currentIndex + 1 >= items.length ? "Submit Session" : "Next →") : "Check Answer"}
-            </button>
-          )}
-        </div>
-      )}
 
     </div>
   );

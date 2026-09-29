@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Progress } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
-type Tab = "overview" | "goals" | "assessment" | "account";
+type Tab = "goals" | "assessment" | "account";
 
 function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, clearAuth } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeTab, setActiveTab] = useState<Tab>("goals");
 
   // Account state
   const [bookmarks, setBookmarks] = useState<BookmarkDTO[]>([]);
@@ -177,7 +177,7 @@ function ProfileContent() {
 
       case "goals":
         const GOALS = ["Pass IELTS", "Pass TOEIC", "Improve English for university", "Speak more confidently", "Business English", "Travel"];
-        const FOCUS_AREAS = ["Vocabulary", "Grammar", "Reading", "Listening", "Writing", "Speaking"];
+        const FOCUS_AREAS = ["Vocabulary", "Grammar", "Reading", "Listening", "Writing"];
 
         return (
           <div className="space-y-8">
@@ -332,7 +332,6 @@ function ProfileContent() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "overview", label: "Overview" },
     { id: "goals", label: "Goals & Focus" },
     { id: "assessment", label: "Assessment" },
     { id: "account", label: "Account" },
