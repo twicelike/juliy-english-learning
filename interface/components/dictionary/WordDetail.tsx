@@ -5,8 +5,6 @@ import { WordDTO } from "@/lib/dictionary-api";
 import { AuthAPI } from "@/lib/auth-api";
 import { useAuthStore } from "@/features/auth";
 import { useRouter } from "next/navigation";
-import AITutor from "@/components/dictionary/AITutor";
-import SenseExplanation from "@/components/dictionary/SenseExplanation";
 import AudioButton from "./AudioButton";
 import { AddToSetModal } from "@/components/wordsets/AddToSetModal";
 
@@ -27,13 +25,18 @@ interface WordDetailProps {
 }
 
 export default function WordDetail({ word }: WordDetailProps) {
-  const [showAll, setShowAll] = useState(false);
+  const [expandedPos, setExpandedPos] = useState<Record<string, boolean>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [loadingBookmark, setLoadingBookmark] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const { user } = useAuthStore();
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check if already bookmarked
   useEffect(() => {
@@ -68,17 +71,15 @@ export default function WordDetail({ word }: WordDetailProps) {
     }
   };
 
-  const initialDefCount = 3;
-  const hasMore = word.definitions.length > initialDefCount;
-  const displayedDefs = showAll ? word.definitions : word.definitions.slice(0, initialDefCount);
-
-  // Group definitions by POS
-  const groupedDefs = displayedDefs.reduce((acc, def) => {
+  // Group ALL definitions by POS
+  const groupedDefs = word.definitions.reduce((acc, def) => {
     const pos = def.partOfSpeech || 'other';
     if (!acc[pos]) acc[pos] = [];
     acc[pos].push(def);
     return acc;
-  }, {} as Record<string, typeof displayedDefs>);
+  }, {} as Record<string, typeof word.definitions>);
+
+  const allPosGroups = Object.keys(groupedDefs);
 
   return (
     <div className="w-full max-w-3xl mx-auto p-6 md:p-10 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md shadow-2xl">
@@ -151,18 +152,49 @@ export default function WordDetail({ word }: WordDetailProps) {
       {/* Meanings */}
       <div className="mb-10">
 
+        {/* POS Navigation — only rendered client-side to avoid SSR/hydration mismatch */}
+        {mounted && allPosGroups.length > 1 && (
+          <div className="sticky top-20 z-30 py-4 -mx-6 px-6 md:-mx-10 md:px-10 bg-[#0f0f15]/95 backdrop-blur-xl border-b border-white/10 mb-8 flex flex-wrap gap-2 shadow-lg">
+            {allPosGroups.map((pos) => {
+              const colors = getPosColor(pos);
+              return (
+                <button
+                  key={`nav-${pos}`}
+                  onClick={() => {
+                    if (!expandedPos[pos]) {
+                      setExpandedPos(prev => ({ ...prev, [pos]: true }));
+                      setTimeout(() => {
+                        document.getElementById(`pos-${pos}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 50);
+                    } else {
+                      document.getElementById(`pos-${pos}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  }}
+                  className={`px-4 py-1.5 rounded-full border text-sm font-medium transition-all hover:opacity-80 ${colors.bg} ${colors.text} ${colors.border}`}
+                >
+                  {pos}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="space-y-10">
           {Object.entries(groupedDefs).map(([pos, defs]) => {
             const colors = getPosColor(pos);
+            const isExpanded = expandedPos[pos];
+            const displayedDefs = isExpanded ? defs : defs.slice(0, 3);
+            const hasMore = defs.length > 3;
+
             return (
-              <div key={pos} className="space-y-6">
+              <div key={pos} id={`pos-${pos}`} className="space-y-6 scroll-mt-24">
                 <h3 className={`text-sm uppercase tracking-widest font-bold flex items-center gap-3 ${colors.text}`}>
                   <span className={`w-8 h-[2px] ${colors.bar}`}></span>
                   {pos}
                 </h3>
 
                 <div className="space-y-8 pl-4 md:pl-8">
-                  {defs.map((def, idx) => (
+                  {displayedDefs.map((def, idx) => (
                     <div key={idx} className="group">
                       <p className="text-white/90 text-lg leading-relaxed mb-3 flex items-start">
                         <span className={`font-bold mr-3 mt-0.5 ${colors.text}`}>{idx + 1}.</span>
@@ -178,33 +210,29 @@ export default function WordDetail({ word }: WordDetailProps) {
                           ))}
                         </div>
                       )}
-
-                      <div className="ml-6 mt-2">
-                        <SenseExplanation wordId={def.word_id || word.id} senseIndex={def.sense_index ?? 0} />
-                      </div>
                     </div>
                   ))}
                 </div>
+
+                {/* View more button specific to this POS */}
+                {hasMore && (
+                  <button
+                    onClick={() => setExpandedPos(prev => ({ ...prev, [pos]: !isExpanded }))}
+                    className={`mt-6 px-6 py-2.5 rounded-full border ${colors.border} ${colors.text} hover:${colors.bg} transition-colors font-medium text-sm flex items-center gap-2`}
+                  >
+                    {isExpanded ? "Thu gọn" : `Xem thêm ${defs.length - 3} nghĩa khác của ${pos}`}
+                    <svg
+                      className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
-
-        {/* View more button */}
-        {hasMore && (
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="mt-8 px-6 py-2.5 rounded-full border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 transition-colors font-medium text-sm flex items-center gap-2 mx-auto md:mx-0"
-          >
-            {showAll ? "Thu gọn" : `Xem thêm ${word.definitions.length - initialDefCount} nghĩa khác`}
-            <svg
-              className={`w-4 h-4 transition-transform ${showAll ? "rotate-180" : ""}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        )}
       </div>
 
       {/* Antonyms */}
@@ -223,9 +251,6 @@ export default function WordDetail({ word }: WordDetailProps) {
           </div>
         </div>
       )}
-
-      {/* AI Tutor Section — visible only when logged in */}
-      {user && <AITutor word={word.word} pos={word.pos} />}
     </div>
   );
 }

@@ -41,6 +41,10 @@ type Service interface {
 	ResendVerification(ctx context.Context, email string) error
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, rawToken, newPassword string) error
+
+	// Admin
+	AdminListUsers(ctx context.Context, offset, limit int) ([]UserResponse, int64, error)
+	AdminUpdateUserRoleStatus(ctx context.Context, executorUserID bson.ObjectID, targetUserID bson.ObjectID, newRole, newStatus string) error
 }
 
 type service struct {
@@ -81,6 +85,7 @@ func (s *service) Register(ctx context.Context, req *RegisterRequest, userAgent,
 		PasswordHash:  string(hashed),
 		DisplayName:   req.DisplayName,
 		EmailVerified: false,
+		Role:          RoleUser,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -233,6 +238,7 @@ func (s *service) LoginWithGoogle(ctx context.Context, userInfo *GoogleUserInfo,
 		DisplayName:   userInfo.Name,
 		AvatarURL:     userInfo.Picture,
 		EmailVerified: true,
+		Role:          RoleUser,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -461,6 +467,8 @@ func (s *service) mapUserResponse(ctx context.Context, user *User) *UserResponse
 		DisplayName:     user.DisplayName,
 		AvatarURL:       user.AvatarURL,
 		EmailVerified:   user.EmailVerified,
+		Role:            user.Role,
+		Status:          user.Status,
 		HasGoogleLinked: hasGoogle,
 	}
 }
@@ -476,4 +484,88 @@ func generateRandomToken() (string, error) {
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
+}
+
+// -----------------------------------------------------------------------------
+// Admin Methods
+// -----------------------------------------------------------------------------
+
+func (s *service) AdminListUsers(ctx context.Context, offset, limit int) ([]UserResponse, int64, error) {
+	users, total, err := s.repo.ListUsers(ctx, offset, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var res []UserResponse
+	for _, u := range users {
+		res = append(res, *s.mapUserResponse(ctx, &u))
+	}
+	return res, total, nil
+}
+
+func getRoleLevel(role string) int {
+	switch role {
+	case RoleSuperior:
+		return 3
+	case RoleAdmin:
+		return 2
+	case RoleUser:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (s *service) AdminUpdateUserRoleStatus(ctx context.Context, executorUserID bson.ObjectID, targetUserID bson.ObjectID, newRole, newStatus string) error {
+	targetUser, err := s.repo.GetUserByID(ctx, targetUserID)
+	if err != nil {
+		return err
+	}
+	if targetUser == nil {
+		return errors.New("user not found")
+	}
+
+	executorUser, err := s.repo.GetUserByID(ctx, executorUserID)
+	if err != nil {
+		return err
+	}
+	if executorUser == nil {
+		return errors.New("executor not found")
+	}
+
+	// Enforcement Rule: ONLY doquochuy16905@gmail.com can be superior.
+	if newRole == RoleSuperior && targetUser.Email != "doquochuy16905@gmail.com" {
+		// Instantly ban them instead.
+		if err := s.repo.UpdateUserRoleStatus(ctx, targetUserID, RoleUser, "banned"); err != nil {
+			return err
+		}
+		_ = s.repo.RevokeAllSessions(ctx, targetUserID)
+		return nil
+	}
+
+	// Hierarchical checks
+	executorLevel := getRoleLevel(executorUser.Role)
+	targetLevel := getRoleLevel(targetUser.Role)
+	newRoleLevel := getRoleLevel(newRole)
+
+	// 1. Cannot modify a user who is at the same or higher level than the executor (including oneself)
+	if executorLevel <= targetLevel {
+		return errors.New("you cannot modify a user with the same or higher role (including yourself)")
+	}
+
+	// 2. Cannot promote a user to a level equal to or higher than the executor's level
+	if executorLevel <= newRoleLevel {
+		return errors.New("you cannot promote a user to the same or higher role as yours")
+	}
+
+	if err := s.repo.UpdateUserRoleStatus(ctx, targetUserID, newRole, newStatus); err != nil {
+		return err
+	}
+
+	// If banned, revoke sessions
+	if newStatus == "banned" {
+		_ = s.repo.RevokeAllSessions(ctx, targetUserID)
+	}
+
+	return nil
 }

@@ -341,3 +341,58 @@ func (h *Handler) clearSessionCookie(c *gin.Context) {
 		true,
 	)
 }
+
+// -----------------------------------------------------------------------------
+// Admin Endpoints
+// -----------------------------------------------------------------------------
+
+func (h *Handler) AdminListUsers(c *gin.Context) {
+	// Simple pagination
+	offset := 0
+	limit := 100
+
+	users, total, err := h.service.AdminListUsers(c.Request.Context(), offset, limit)
+	if err != nil {
+		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list users")
+		return
+	}
+
+	domain.OK(c, gin.H{
+		"users": users,
+		"total": total,
+	})
+}
+
+type AdminUpdateUserRequest struct {
+	Role   string `json:"role"`
+	Status string `json:"status"` // "active" or "banned"
+}
+
+func (h *Handler) AdminUpdateUser(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := bson.ObjectIDFromHex(userIDStr)
+	if err != nil {
+		domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid user ID")
+		return
+	}
+
+	var req AdminUpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		domain.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	executorIDStr := c.GetString("user_id")
+	executorID, err := bson.ObjectIDFromHex(executorIDStr)
+	if err != nil {
+		domain.Fail(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid executor context")
+		return
+	}
+
+	if err := h.service.AdminUpdateUserRoleStatus(c.Request.Context(), executorID, userID, req.Role, req.Status); err != nil {
+		domain.Fail(c, http.StatusForbidden, "FORBIDDEN", err.Error())
+		return
+	}
+
+	domain.OK(c, gin.H{"message": "User updated successfully"})
+}

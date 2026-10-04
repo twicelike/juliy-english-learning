@@ -104,6 +104,10 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 			translationWorker.Start(ctx)
 		}
 
+		translationHandler := translation.NewHandler(translationRepo)
+
+
+
 		words := v1.Group("/words")
 		{
 			words.GET("/search", dictHandler.Search)
@@ -170,6 +174,16 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 				authProtected.GET("/sessions", authHandler.GetSessions)
 				authProtected.DELETE("/sessions/:id", authHandler.RevokeSession)
 			}
+		}
+
+		adminRoutes := v1.Group("/admin")
+		adminRoutes.Use(middleware.RequireAdmin(authRepo))
+		{
+			adminRoutes.GET("/translation-jobs/stats", translationHandler.GetJobStats)
+			adminRoutes.POST("/translation-jobs/retry-failed", translationHandler.RetryFailedJobs)
+
+			adminRoutes.GET("/users", authHandler.AdminListUsers)
+			adminRoutes.PATCH("/users/:id", authHandler.AdminUpdateUser)
 		}
 
 		// User

@@ -14,6 +14,8 @@ type Repository interface {
 	CreateUser(ctx context.Context, user *User) error
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByID(ctx context.Context, id bson.ObjectID) (*User, error)
+	ListUsers(ctx context.Context, offset, limit int) ([]User, int64, error)
+	UpdateUserRoleStatus(ctx context.Context, id bson.ObjectID, role, status string) error
 
 	// Sessions
 	CreateSession(ctx context.Context, session *Session) error
@@ -102,6 +104,39 @@ func (r *repository) GetUserByID(ctx context.Context, id bson.ObjectID) (*User, 
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (r *repository) ListUsers(ctx context.Context, offset, limit int) ([]User, int64, error) {
+	filter := bson.M{}
+	
+	total, err := r.userColl.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetSkip(int64(offset)).SetLimit(int64(limit))
+	cursor, err := r.userColl.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []User
+	if err = cursor.All(ctx, &users); err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+func (r *repository) UpdateUserRoleStatus(ctx context.Context, id bson.ObjectID, role, status string) error {
+	update := bson.M{"$set": bson.M{
+		"role": role,
+		"status": status,
+		"updated_at": time.Now(),
+	}}
+	_, err := r.userColl.UpdateOne(ctx, bson.M{"_id": id}, update)
+	return err
 }
 
 func (r *repository) UpdateUserEmailVerified(ctx context.Context, userID bson.ObjectID, verified bool) error {

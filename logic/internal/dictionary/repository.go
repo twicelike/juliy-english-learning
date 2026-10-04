@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"regexp"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -91,6 +92,7 @@ func (r *repository) GetWord(ctx context.Context, word string) (*WordDocument, e
 }
 
 func (r *repository) GetWords(ctx context.Context, word string) ([]WordDocument, error) {
+	// Step 1: Try exact match first — fast, uses index
 	filter := bson.M{"word": word}
 	cursor, err := r.coll.Find(ctx, filter)
 	if err != nil {
@@ -102,7 +104,23 @@ func (r *repository) GetWords(ctx context.Context, word string) ([]WordDocument,
 	if err := cursor.All(ctx, &docs); err != nil {
 		return nil, err
 	}
-	return docs, nil
+	if len(docs) > 0 {
+		return docs, nil
+	}
+
+	// Step 2: Fallback — case-insensitive match for words stored with different casing (e.g., "Hello World")
+	ciFilter := bson.M{"word": bson.M{"$regex": "^" + regexp.QuoteMeta(word) + "$", "$options": "i"}}
+	ciCursor, err := r.coll.Find(ctx, ciFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer ciCursor.Close(ctx)
+
+	var ciDocs []WordDocument
+	if err := ciCursor.All(ctx, &ciDocs); err != nil {
+		return nil, err
+	}
+	return ciDocs, nil
 }
 
 func (r *repository) GetTopWordsNotIn(ctx context.Context, excludeIDs []bson.ObjectID, limit int) ([]WordDocument, error) {

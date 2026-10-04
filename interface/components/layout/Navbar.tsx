@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuthStore } from "@/features/auth";
+import { hasAdminAccess } from "@/features/auth/types";
 
 export default function Navbar() {
   const { user } = useAuthStore();
@@ -33,6 +34,11 @@ export default function Navbar() {
               <Link href="/word-sets" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
                 My Sets
               </Link>
+              {hasAdminAccess(user.role) && (
+                <Link href="/admin/translation-jobs" className="text-sm opacity-70 hover:opacity-100 transition-opacity text-amber-400 font-bold">
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/profile"
                 className="px-4 py-2 text-sm font-medium bg-white/10 hover:bg-white/20 rounded-full transition-colors"

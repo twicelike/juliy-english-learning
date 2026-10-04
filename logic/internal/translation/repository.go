@@ -14,6 +14,8 @@ type Repository interface {
 	EnqueueJob(ctx context.Context, wordID bson.ObjectID, targetLang string) error
 	ClaimJobs(ctx context.Context, limit int) ([]TranslationJob, error)
 	UpdateJobStatus(ctx context.Context, id bson.ObjectID, status JobStatus, errStr string, nextAttemptAt time.Time) error
+	GetJobStats(ctx context.Context) (map[string]int64, error)
+	RetryFailedJobs(ctx context.Context) (int64, error)
 
 	// Translations
 	SaveManyTranslations(ctx context.Context, translations []WordTranslation) error

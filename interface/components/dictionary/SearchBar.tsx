@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DictionaryAPI, WordDTO } from "@/lib/dictionary-api";
 
@@ -10,14 +9,9 @@ export default function SearchBar() {
   const [results, setResults] = useState<WordDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search
   useEffect(() => {
@@ -33,7 +27,7 @@ export default function SearchBar() {
         const data = await DictionaryAPI.search(query);
         setResults(data);
       } catch (err) {
-        setResults([]); // Handle error gracefully
+        setResults([]);
       } finally {
         setLoading(false);
       }
@@ -41,30 +35,6 @@ export default function SearchBar() {
 
     return () => clearTimeout(timer);
   }, [query]);
-
-  // Update dropdown position — called on mount, scroll, resize, and whenever dropdown opens
-  const updateDropdownPos = () => {
-    if (showDropdown && wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      setDropdownStyle({
-        position: "fixed",
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: rect.width,
-        zIndex: 9999,
-      });
-    }
-  };
-
-  useEffect(() => {
-    updateDropdownPos();
-    window.addEventListener("scroll", updateDropdownPos, true);
-    window.addEventListener("resize", updateDropdownPos);
-    return () => {
-      window.removeEventListener("scroll", updateDropdownPos, true);
-      window.removeEventListener("resize", updateDropdownPos);
-    };
-  }, [showDropdown, query]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -80,6 +50,7 @@ export default function SearchBar() {
   const handleSelect = (word: string) => {
     setShowDropdown(false);
     setQuery("");
+    inputRef.current?.blur();
     router.push(`/dictionary/${encodeURIComponent(word)}`);
   };
 
@@ -87,42 +58,18 @@ export default function SearchBar() {
     if (e.key === "Enter" && query.trim()) {
       handleSelect(query.trim().toLowerCase());
     }
+    if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
   };
 
-  const dropdown = showDropdown && query.trim() && !loading && (
-    <div
-      className="bg-[#12121c] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] overflow-y-auto"
-      style={dropdownStyle}
-    >
-      {results.length > 0 ? (
-        <ul className="py-2">
-          {results.map((w, index) => (
-            <li key={`${w.word}-${w.pos}-${index}`}>
-              <button
-                onClick={() => handleSelect(w.word)}
-                className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center justify-between group"
-              >
-                <div>
-                  <span className="text-white font-medium group-hover:text-indigo-300">{w.word}</span>
-                  {w.pos && <span className="ml-2 text-xs text-white/40 italic">{w.pos}</span>}
-                </div>
-                {w.ipa && <span className="text-xs text-indigo-200/50">{w.ipa}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="p-6 text-center text-white/50 text-sm">
-          Không tìm thấy từ "{query}"
-        </div>
-      )}
-    </div>
-  );
+  const isOpen = showDropdown && !!query.trim() && !loading && results.length > 0;
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-2xl mx-auto">
       <div className="relative flex items-center">
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => {
@@ -135,6 +82,7 @@ export default function SearchBar() {
           className="w-full h-14 pl-12 pr-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 backdrop-blur-md transition-all shadow-lg"
           spellCheck={false}
           autoComplete="off"
+          suppressHydrationWarning
         />
         <svg
           className="absolute left-4 w-5 h-5 text-white/50"
@@ -151,8 +99,30 @@ export default function SearchBar() {
         )}
       </div>
 
-      {/* Dropdown rendered via Portal to escape stacking context */}
-      {mounted && dropdown && createPortal(dropdown, document.body)}
+      {/* Dropdown: absolute inside wrapper, no Portal, no fixed positioning */}
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-[#12121c] border border-white/10 rounded-xl shadow-2xl overflow-y-auto z-50 max-h-[60vh]">
+          <ul className="py-2">
+            {results.map((w, index) => (
+              <li key={`${w.word}-${w.pos}-${index}`}>
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSelect(w.word);
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center justify-between group"
+                >
+                  <div>
+                    <span className="text-white font-medium group-hover:text-indigo-300">{w.word}</span>
+                    {w.pos && <span className="ml-2 text-xs text-white/40 italic">{w.pos}</span>}
+                  </div>
+                  {w.ipa && <span className="text-xs text-indigo-200/50">{w.ipa}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

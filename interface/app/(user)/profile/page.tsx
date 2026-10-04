@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Progress } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
-type Tab = "goals" | "assessment" | "account";
+type Tab = "overview" | "goals" | "assessment" | "account";
 
 function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, clearAuth } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<Tab>("goals");
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   // Account state
   const [bookmarks, setBookmarks] = useState<BookmarkDTO[]>([]);
@@ -332,6 +332,7 @@ function ProfileContent() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "overview", label: "Overview" },
     { id: "goals", label: "Goals & Focus" },
     { id: "assessment", label: "Assessment" },
     { id: "account", label: "Account" },
@@ -342,7 +343,7 @@ function ProfileContent() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
         <div>
           <h1 className="text-3xl font-bold mb-2">Profile</h1>
-          <p className="opacity-50">{user.email}</p>
+          <p className="opacity-50">{user.email} (Role: {user.role || 'none'})</p>
         </div>
         <Button
           onClick={handleLogout}

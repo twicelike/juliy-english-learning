@@ -40,8 +40,8 @@ func main() {
 	}
 	fmt.Println("Cleared existing pending jobs.")
 
-	// Get Top 100 words
-	topWords, err := dictRepo.GetTopWordsNotIn(ctx, nil, 100)
+	// Get Top 5000 words
+	topWords, err := dictRepo.GetTopWordsNotIn(ctx, nil, 5000)
 	if err != nil {
 		log.Fatalf("Failed to get top words: %v", err)
 	}

@@ -6,6 +6,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+const (
+	RoleSuperior = "superior"
+	RoleAdmin    = "admin"
+	RoleUser     = "user"
+)
+
 // User represents a user document in MongoDB.
 type User struct {
 	ID            bson.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -15,6 +21,7 @@ type User struct {
 	AvatarURL     string        `bson:"avatar_url" json:"avatar_url"`
 	EmailVerified bool          `bson:"email_verified" json:"email_verified"`
 	Status        string        `bson:"status" json:"status"`
+	Role          string        `bson:"role" json:"role"` // e.g., "user" or "admin"
 	CreatedAt     time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt     time.Time     `bson:"updated_at" json:"updated_at"`
 	LastLoginAt   *time.Time    `bson:"last_login_at,omitempty" json:"last_login_at,omitempty"`
@@ -82,6 +89,8 @@ type UserResponse struct {
 	DisplayName     string `json:"display_name"`
 	AvatarURL       string `json:"avatar_url,omitempty"`
 	EmailVerified   bool   `json:"email_verified"`
+	Role            string `json:"role"`
+	Status          string `json:"status"`
 	HasGoogleLinked bool   `json:"has_google_linked"`
 }
 

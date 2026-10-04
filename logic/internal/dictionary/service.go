@@ -87,7 +87,7 @@ func (s *service) Search(ctx context.Context, query string) ([]WordDTO, error) {
 }
 
 func (s *service) GetDetail(ctx context.Context, word string) (*WordDTO, error) {
-	word = strings.ToLower(strings.TrimSpace(word))
+	word = strings.TrimSpace(word)
 	docs, err := s.repo.GetWords(ctx, word)
 	if err != nil {
 		return nil, err

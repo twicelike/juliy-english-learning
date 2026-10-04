@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import MatchCard, { MatchCardData } from "./MatchCard";
 import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "@/lib/api-client";
@@ -16,22 +16,36 @@ export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Pr
   const [loading, setLoading] = useState(true);
   const [sessionKept, setSessionKept] = useState(0);
   const [sessionPassed, setSessionPassed] = useState(0);
-  const [showSummary, setShowSummary] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const isFetchingRef = useRef(false);
 
-  const fetchCards = async () => {
-    setLoading(true);
-    setShowSummary(false);
+  const fetchCards = async (append = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!append) setLoading(true);
     try {
       const res = await apiClient.get("/match/recommendations");
       if (res.data?.success) {
-        setCards(Array.isArray(res.data.data) ? res.data.data : []);
+        const newCards = Array.isArray(res.data.data) ? res.data.data : [];
+        if (append) {
+          setCards(prev => {
+            // Filter out cards that are already in the deck to prevent duplicates
+            // (e.g., if API returns words we just swiped but haven't been saved in DB yet)
+            const uniqueNewCards = newCards.filter(
+              (newCard: MatchCardData) => !prev.some(p => p.word_id === newCard.word_id)
+            );
+            return [...prev, ...uniqueNewCards];
+          });
+        } else {
+          setCards(newCards);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch match recommendations", err);
-      setCards([]);
+      if (!append) setCards([]);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
@@ -42,8 +56,14 @@ export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Pr
   }, []);
 
   const handleSwipe = async (action: "keep" | "pass", card: MatchCardData) => {
-    // Remove top card immediately
-    setCards((prev) => prev.slice(1));
+    // Remove top card immediately and prefetch if running low
+    setCards((prev) => {
+      const newCards = prev.slice(1);
+      if (newCards.length <= 3 && !isFetchingRef.current) {
+        fetchCards(true);
+      }
+      return newCards;
+    });
 
     if (action === "keep") {
       setSessionKept((prev) => prev + 1);
@@ -89,14 +109,10 @@ export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Pr
       }
     }
 
-    // Check if we need to show summary or fetch next batch
-    if (cards.length <= 1) {
-      setShowSummary(true);
-    }
+    // Note: Infinite scrolling, so we don't show a summary break anymore.
   };
 
-  const totalCards = cards.length + sessionKept + sessionPassed;
-  const currentCardIndex = sessionKept + sessionPassed + 1;
+  const totalDiscovered = sessionKept + sessionPassed;
 
   if (loading && cards.length === 0) {
     return (
@@ -106,62 +122,13 @@ export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Pr
     );
   }
 
-  if (showSummary) {
-    return (
-      <div className="w-full max-w-md bg-white rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-sm border-2 border-gray-800"
-        style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}
-      >
-        <h2 className="text-3xl text-black font-bold font-handwritten mb-6">You've discovered {sessionKept + sessionPassed} words!</h2>
-
-        <div className="space-y-4 mb-8 w-full">
-          <div className="flex justify-between items-center text-xl font-handwritten px-4 py-2 border-2 border-green-200 bg-green-50 rounded-xl"
-            style={{ borderRadius: "15px 225px 15px 255px/255px 15px 225px 15px" }}>
-            <span className="text-black">Kept</span>
-            <span className="font-bold text-green-600">{sessionKept}</span>
-          </div>
-          <div className="flex justify-between items-center text-xl font-handwritten px-4 py-2 border-2 border-gray-200 bg-gray-50 rounded-xl"
-            style={{ borderRadius: "225px 15px 255px 15px/15px 255px 15px 225px" }}>
-            <span className="text-black">× Passed</span>
-            <span className="font-bold text-gray-600">{sessionPassed}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4 w-full">
-          <button
-            className="w-full py-4 bg-gray-900 text-white font-handwritten text-xl rounded-xl hover:bg-gray-800 transition-colors border-2 border-black"
-            style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}
-            onClick={() => window.location.href = '/learning/session'}
-          >
-            Learn kept words
-          </button>
-
-          <button
-            className="w-full py-4 bg-transparent text-gray-900 font-handwritten text-xl rounded-xl hover:bg-gray-100 transition-colors border-2 border-gray-800"
-            style={{ borderRadius: "15px 225px 15px 255px/255px 15px 225px 15px" }}
-            onClick={fetchCards}
-          >
-            Keep discovering
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full h-full flex flex-col items-center">
       <div className="w-full px-8 mb-4">
         <div className="flex justify-between items-center font-handwritten text-gray-500 mb-2">
           <span>Discover words you'll want to know</span>
-          {totalCards > 0 && <span>{Math.min(currentCardIndex, totalCards)} / {totalCards}</span>}
+          {totalDiscovered > 0 && <span>Discovered: {totalDiscovered}</span>}
         </div>
-        {totalCards > 0 && (
-          <div className="w-full h-1 bg-gray-200 relative" style={{ borderRadius: "5px" }}>
-            <div
-              className="absolute top-0 left-0 h-full bg-gray-800 transition-all duration-300"
-              style={{ width: `${Math.min((currentCardIndex / totalCards) * 100, 100)}%`, borderRadius: "5px" }}
-            />
-          </div>
-        )}
       </div>
 
       <div className="relative w-full max-w-md flex-1 min-h-[500px] mt-8 flex justify-center perspective-[1000px]">
@@ -193,7 +160,7 @@ export default function MatchDeck({ selectedSetIds = [], onWordSetsUpdated }: Pr
           <div className="absolute w-full h-full bg-white rounded-3xl p-6 flex flex-col justify-center items-center shadow-sm border-2 border-gray-800"
             style={{ borderRadius: "255px 15px 225px 15px/15px 225px 15px 255px" }}>
             <span className="text-2xl font-handwritten">No more words to discover right now.</span>
-            <button onClick={fetchCards} className="mt-8 font-handwritten border-b-2 border-gray-800">Refresh</button>
+            <button onClick={() => fetchCards(false)} className="mt-8 font-handwritten border-b-2 border-gray-800">Refresh</button>
           </div>
         )}
       </div>

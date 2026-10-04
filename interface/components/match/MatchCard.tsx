@@ -95,7 +95,7 @@ export default function MatchCard({ card, onSwipe, isTop, index }: MatchCardProp
         drag={isTop ? "x" : false}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         onDragEnd={handleDragEnd}
-        className={`w-full max-w-md min-h-[300px] h-auto shrink-0 bg-white rounded-3xl p-6 flex flex-col relative shadow-sm border-2 border-gray-800 ${
+        className={`select-none w-full max-w-md min-h-[300px] h-auto shrink-0 bg-white rounded-3xl p-6 flex flex-col relative shadow-sm border-2 border-gray-800 ${
           isTop ? "cursor-grab active:cursor-grabbing touch-none" : ""
         }`}
         // Wobbly border effect using border-radius

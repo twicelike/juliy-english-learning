@@ -35,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={geist.variable}>
-      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col transition-colors duration-300">
+    <html lang="en" className={geist.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-[#0a0a12] text-white antialiased flex flex-col transition-colors duration-300" suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             <Navbar />

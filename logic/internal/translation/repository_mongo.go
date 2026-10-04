@@ -178,6 +178,36 @@ func (r *mongoRepository) UpdateJobStatus(ctx context.Context, id bson.ObjectID,
 	return err
 }
 
+func (r *mongoRepository) GetJobStats(ctx context.Context) (map[string]int64, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$status"},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+
+	cursor, err := r.jobsColl.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		ID    string `bson:"_id"`
+		Count int64  `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	stats := make(map[string]int64)
+	for _, res := range results {
+		stats[res.ID] = res.Count
+	}
+	return stats, nil
+}
+
 func (r *mongoRepository) SaveManyTranslations(ctx context.Context, translations []WordTranslation) error {
 	if len(translations) == 0 {
 		return nil
@@ -234,4 +264,29 @@ func (r *mongoRepository) GetTranslationsByWordIDs(ctx context.Context, wordIDs 
 	}
 
 	return results, nil
+}
+
+func (r *mongoRepository) RetryFailedJobs(ctx context.Context) (int64, error) {
+	filter := bson.M{"status": JobStatusFailed}
+	
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"status":          JobStatusPending,
+			"attempts":        0,
+			"error":           "",
+			"claimable_at":    time.Time{},
+			"next_attempt_at": now,
+			"updated_at":      now,
+		},
+		"$unset": bson.M{
+			"locked_at": "",
+		},
+	}
+
+	result, err := r.jobsColl.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, err
+	}
+	return result.ModifiedCount, nil
 }
