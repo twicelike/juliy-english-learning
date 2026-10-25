@@ -208,6 +208,29 @@ func (r *mongoRepository) GetJobStats(ctx context.Context) (map[string]int64, er
 	return stats, nil
 }
 
+func (r *mongoRepository) GetFailedJobs(ctx context.Context, limit int) ([]TranslationJob, error) {
+	filter := bson.M{"status": JobStatusFailed}
+	
+	// Sort by updated_at descending to get the most recent failures
+	opts := options.Find().SetSort(bson.D{{Key: "updated_at", Value: -1}})
+	if limit > 0 {
+		opts.SetLimit(int64(limit))
+	}
+	
+	cursor, err := r.jobsColl.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	var jobs []TranslationJob
+	if err := cursor.All(ctx, &jobs); err != nil {
+		return nil, err
+	}
+	
+	return jobs, nil
+}
+
 func (r *mongoRepository) SaveManyTranslations(ctx context.Context, translations []WordTranslation) error {
 	if len(translations) == 0 {
 		return nil

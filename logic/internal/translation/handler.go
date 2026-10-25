@@ -39,3 +39,16 @@ func (h *Handler) RetryFailedJobs(c *gin.Context) {
 		"count":   count,
 	})
 }
+
+func (h *Handler) GetFailedJobs(c *gin.Context) {
+	// Optional limit
+	limit := 50
+	
+	jobs, err := h.repo.GetFailedJobs(c.Request.Context(), limit)
+	if err != nil {
+		domain.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch failed jobs")
+		return
+	}
+	
+	domain.OK(c, jobs)
+}

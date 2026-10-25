@@ -21,6 +21,16 @@ apiClient.interceptors.response.use(
     } else if (error.response?.data?.error?.message) {
       error.message = error.response.data.error.message;
     }
+    
+    if (!isServer) {
+      import("sonner").then(({ toast }) => {
+        // Skip toast for 401 Unauthorized from /auth/me because it's handled silently by AuthProvider
+        if (error.config?.url === "/auth/me" && error.response?.status === 401) {
+          return;
+        }
+        toast.error(error.message || "An unexpected error occurred");
+      });
+    }
 
     return Promise.reject(error);
   }

@@ -13,6 +13,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (status === "unauthenticated" || (user && !hasAdminAccess(user.role))) {
+      import("sonner").then(({ toast }) => {
+        toast.error(`Admin Access Denied. Role: ${user?.role}, Status: ${status}`);
+      });
       router.push("/");
     }
   }, [user, status, router]);

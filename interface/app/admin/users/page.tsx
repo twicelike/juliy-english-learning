@@ -41,12 +41,11 @@ export default function AdminUsersPage() {
         status: status || "active",
       });
       if (res.data?.success) {
-        alert("User updated successfully");
+        import("sonner").then(({ toast }) => toast.success("User updated successfully"));
         fetchUsers();
       }
     } catch (err: any) {
       console.error("Failed to update user", err);
-      alert(err.response?.data?.error?.message || "Failed to update user");
       fetchUsers(); // Refresh to get true state
     }
   };

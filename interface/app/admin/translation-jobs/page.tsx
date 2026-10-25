@@ -15,6 +15,7 @@ const COLORS = {
 
 export default function TranslationJobsAdminPage() {
   const [stats, setStats] = useState<any[]>([]);
+  const [failedJobs, setFailedJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
 
@@ -39,11 +40,26 @@ export default function TranslationJobsAdminPage() {
     }
   };
 
+  const fetchFailedJobs = async () => {
+    try {
+      const res = await apiClient.get("/admin/translation-jobs/failed");
+      if (res.data?.success) {
+        setFailedJobs(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch failed jobs", err);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
+    fetchFailedJobs();
     
     // Refresh every 5 seconds
-    const interval = setInterval(fetchStats, 5000);
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchFailedJobs();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -52,12 +68,12 @@ export default function TranslationJobsAdminPage() {
       setRetrying(true);
       const res = await apiClient.post("/admin/translation-jobs/retry-failed");
       if (res.data?.success) {
-        alert(`Successfully queued ${res.data.data?.count || 0} failed jobs for retry!`);
+        import("sonner").then(({ toast }) => toast.success(`Successfully queued ${res.data.data?.count || 0} failed jobs for retry!`));
         fetchStats();
+        fetchFailedJobs();
       }
     } catch (err) {
       console.error("Failed to retry jobs", err);
-      alert("Failed to retry jobs. Check console for details.");
     } finally {
       setRetrying(false);
     }
@@ -86,7 +102,7 @@ export default function TranslationJobsAdminPage() {
       </div>
       
       {stats.length > 0 ? (
-        <div className="h-80 w-full">
+        <div className="h-80 w-full mb-8">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -112,6 +128,42 @@ export default function TranslationJobsAdminPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-gray-500">No data available</div>
+      )}
+
+      {failedJobs.length > 0 && (
+        <div className="mt-8 pt-8 border-t border-white/10">
+          <h3 className="text-lg font-medium mb-4">Recent Failed Jobs</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs uppercase bg-white/5 text-gray-300">
+                <tr>
+                  <th className="px-4 py-3 rounded-tl-lg">Time (Updated)</th>
+                  <th className="px-4 py-3">Language</th>
+                  <th className="px-4 py-3">Attempts</th>
+                  <th className="px-4 py-3 rounded-tr-lg">Error Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedJobs.map((job) => (
+                  <tr key={job.ID} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-3 font-medium whitespace-nowrap opacity-80">
+                      {new Date(job.UpdatedAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 uppercase">
+                      {job.TargetLanguage}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {job.Attempts}
+                    </td>
+                    <td className="px-4 py-3 text-red-400 max-w-md truncate" title={job.Error}>
+                      {job.Error}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

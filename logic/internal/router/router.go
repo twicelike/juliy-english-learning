@@ -180,6 +180,7 @@ func Setup(ctx context.Context, cfg *config.Config, mongoClient *mongo.Client, c
 		adminRoutes.Use(middleware.RequireAdmin(authRepo))
 		{
 			adminRoutes.GET("/translation-jobs/stats", translationHandler.GetJobStats)
+			adminRoutes.GET("/translation-jobs/failed", translationHandler.GetFailedJobs)
 			adminRoutes.POST("/translation-jobs/retry-failed", translationHandler.RetryFailedJobs)
 
 			adminRoutes.GET("/users", authHandler.AdminListUsers)
